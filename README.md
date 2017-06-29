@@ -43,4 +43,4 @@ Author
 
 [Reyk Floeter](https://github.com/reyk/).
 
-See the [License](License.md) file for more information.
+See the [License](LICENSE.md) file for more information.
