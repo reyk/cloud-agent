@@ -239,8 +239,10 @@ xml_end_element(void *data, const char *el)
 		fatal("missing element");
 	if (strcmp(xe->xe_tag, el) != 0)
 		fatal("unexpected closing tag: %s <> %s", el, xe->xe_tag);
-	if (xe->xe_data == NULL)
+	if (xe->xe_data == NULL) {
 		xe->xe_data = strdup("");
+		xe->xe_datalen = 0;
+	}
 
 	env->ox_cur = xe->xe_parent;
 	env->ox_depth--;

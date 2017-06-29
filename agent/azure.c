@@ -720,6 +720,21 @@ azure_getovfenv(struct system_config *sc)
 			log_debug("%s: password failed", __func__);
 			goto done;
 		}
+
+		free(xe->xe_tag);
+		free(xe->xe_data);
+		explicit_bzero(xe->xe_data, xe->xe_datalen);
+
+		/* Replace unencrypted password with hash */
+		xe->xe_tag = strdup("UserPasswordHash");
+		xe->xe_data = strdup(sc->sc_password);
+		xe->xe_datalen = strlen(sc->sc_password);
+	} else if ((xe = xml_findl(&xp->xe_head,
+	    "UserPasswordHash", NULL)) != NULL) {
+		if ((sc->sc_password = strdup(xe->xe_data)) != NULL) {
+			log_debug("%s: password hash failed", __func__);
+			goto done;
+		}
 	}
 
 	if ((fd = open(sc->sc_ovfenv, O_WRONLY|O_CREAT|O_TRUNC, 0600)) == -1 ||
