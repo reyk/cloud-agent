@@ -33,7 +33,7 @@ Installation is easy, `cloud-agent` detects the cloud type automatically.
 
 * On OpenBSD VMM (with meta-data), create a file `/etc/hostname.vio0`
 
-* The content of the fill is identical for all of them:
+* The content of the file is identical for all of them:
 
 		dhcp
 		!/usr/local/libexec/cloud-agent "\$if"
