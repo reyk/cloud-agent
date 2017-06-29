@@ -419,10 +419,12 @@ agent_configure(struct system_config *sc, int noaction)
 	char			*str1, *str2;
 
 	/* Skip configuration on the same instance */
-	if ((str1 = filein("r", "/var/db/cloud-instance")) != NULL &&
-	    strcmp(sc->sc_instance, str1) == 0) {
-		free(str1);
-		return (0);
+	if ((str1 = filein("r", "/var/db/cloud-instance")) != NULL) {
+		str1[strcspn(str1, "\r\n")] = '\0';
+		if (strcmp(sc->sc_instance, str1) == 0) {
+			free(str1);
+			return (0);
+		}
 	}
 	free(str1);
 
