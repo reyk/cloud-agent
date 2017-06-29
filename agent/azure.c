@@ -653,17 +653,27 @@ azure_getovfenv(struct system_config *sc)
 	int		 mount = 0, ret = -1, fd = -1;
 	FILE		*fp;
 
-	/* try to mount the cdrom */
-	if (shell("mount", "-r", sc->sc_cdrom, "/mnt", NULL) == 0) {
+	/* Silently try to mount the cdrom */
+	fd = disable_output(sc, STDERR_FILENO);
+	ret = shell("mount", "-r", sc->sc_cdrom, "/mnt", NULL);
+	enable_output(sc, STDERR_FILENO, fd);
+	fd = -1;
+
+	if (ret == 0) {
 		log_debug("%s: mounted %s", __func__, sc->sc_cdrom);
 		mount = 1;
 	}
+	ret = -1;
 
 	if (xml_init(&xml) != 0) {
 		log_debug("%s: xml", __func__);
 		goto done;
 	}
-	xml_parse(&xml, "/mnt/ovf-env.xml");
+
+	/* Fallback to and older ovf-env.xml file */
+	if (xml_parse(&xml, "/mnt/ovf-env.xml") == -1 &&
+	    xml_parse(&xml, sc->sc_ovfenv) == -1)
+		goto done;
 
 	/* unmount if we mounted the cdrom before */
 	if (mount && shell("umount", "/mnt", NULL) == 0) {

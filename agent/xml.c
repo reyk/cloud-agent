@@ -341,8 +341,10 @@ xml_parse(struct xml *env, const char *file)
 	void		*xml;
 	ssize_t		 len;
 
-	if ((fd = open(file, O_RDONLY)) == -1)
-		fatal("open %s", file);
+	if ((fd = open(file, O_RDONLY)) == -1) {
+		log_debug("%s: open %s", __func__, file);
+		return (-1);
+	}
 
 	do {
 		if ((xml = XML_GetBuffer(parser, BUFSIZ)) == NULL)
