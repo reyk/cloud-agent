@@ -483,7 +483,7 @@ azure_getpubkeys(struct system_config *sc)
 	FILE			*fp;
 	int			 ret = -1;
 	FILE			*infp = NULL;
-	char			*inbuf;
+	char			*inbuf = NULL;
 	size_t			 inbufsz;
 
 	if ((fp = fopen(az->az_certs, "r")) == NULL) {
@@ -769,6 +769,7 @@ azure_getendpoint(struct system_config *sc)
 			if (asprintf(&ep, "%d.%d.%d.%d",
 			    a[0], a[1], a[2], a[3]) == -1) {
 				log_debug("%s: asprintf", __func__);
+				fclose(fp);
 				return (-1);
 			}
 		}

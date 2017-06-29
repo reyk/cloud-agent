@@ -162,6 +162,7 @@ shellout(const char *in, char **out, const char *arg, ...)
 	}
 
 	free(argv);
+	argv = NULL;
 	sigaction(SIGINT, NULL, &sigint);
 	sigaction(SIGQUIT, NULL, &sigquit);
 
@@ -381,8 +382,10 @@ filein(const char *mode, const char *fmt, ...)
 		return (NULL);
 	}
 	free(path);
-	if ((infp = open_memstream(&inbuf, &inbufsz)) == NULL)
+	if ((infp = open_memstream(&inbuf, &inbufsz)) == NULL) {
 		fclose(fp);
+		return (NULL);
+	}
 	while (fgets(buf, sizeof(buf), fp) != NULL) {
 		fputs(buf, infp);
 	}

@@ -235,7 +235,9 @@ xml_end_element(void *data, const char *el)
 	struct xml	*env = data;
 	struct xmlelem	*xe = env->ox_cur;
 
-	if (xe == NULL || strcmp(xe->xe_tag, el) != 0)
+	if (xe == NULL)
+		fatal("missing element");
+	if (strcmp(xe->xe_tag, el) != 0)
 		fatal("unexpected closing tag: %s <> %s", el, xe->xe_tag);
 	if (xe->xe_data == NULL)
 		xe->xe_data = strdup("");
