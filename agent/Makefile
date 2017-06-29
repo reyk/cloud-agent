@@ -2,6 +2,8 @@ PROG=		cloud-agent
 SRCS=		main.c xml.c azure.c cloudinit.c http.c log.c
 BINDIR=		/usr/local/libexec
 
+MAN=		cloud-agent.8
+
 .ifdef USE_OPENSSL
 CFLAGS+=	-DUSE_OPENSSL=1
 .endif
@@ -14,7 +16,5 @@ CFLAGS+=	-Wsign-compare -Wcast-qual
 
 LDADD+=		-lexpat -ltls -lssl -lcrypto
 DPADD+=		${LIBEXPAT} ${LIBTLS} ${LIBSSL} ${LIBCRYPTO}
-
-NOMAN=		yes
 
 .include <bsd.prog.mk>

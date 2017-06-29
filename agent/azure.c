@@ -731,12 +731,12 @@ azure_getovfenv(struct system_config *sc)
 			goto done;
 		}
 
-		free(xe->xe_tag);
-		free(xe->xe_data);
-		explicit_bzero(xe->xe_data, xe->xe_datalen);
-
 		/* Replace unencrypted password with hash */
+		free(xe->xe_tag);
 		xe->xe_tag = strdup("UserPasswordHash");
+
+		explicit_bzero(xe->xe_data, xe->xe_datalen);
+		free(xe->xe_data);
 		xe->xe_data = strdup(sc->sc_password);
 		xe->xe_datalen = strlen(sc->sc_password);
 	} else if ((xe = xml_findl(&xp->xe_head,

@@ -1,0 +1,67 @@
+.\"	$OpenBSD: mdoc.template,v 1.15 2014/03/31 00:09:54 dlg Exp $
+.\"
+.\" Copyright (c) 2017 Reyk Floeter <reyk@openbsd.org>
+.\"
+.\" Permission to use, copy, modify, and distribute this software for any
+.\" purpose with or without fee is hereby granted, provided that the above
+.\" copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd $Mdocdate$
+.Dt CLOUD-AGENT 8
+.Os
+.Sh NAME
+.Nm cloud-agent
+.Nd cloud provisiong for OpenBSD VMs
+.Sh SYNOPSIS
+.Nm cloud-agent
+.Op Fl nuv
+.Ar interface
+.Sh DESCRIPTION
+The
+.Nm
+program manages the OpenBSD provisioning and VM interaction in cloud
+environments, including Microsoft Azure and Amazon AWS.
+.Pp
+The options are as follows:
+.Bl -tag -width Ds
+.It Fl n
+Do not configure the system and skip the provisioning step.
+.It Fl u
+Deprovisiong and unconfigure the system.
+This deletes keys, passwords, and logs files without asking for permission.
+.It Fl v
+Produce more verbose output.
+.El
+.Pp
+Enable
+.Nm
+in the
+.Xr hostname.if 5
+of the VM's primary networking interface:
+.Bd -literal -offset indent
+# cat /etc/hostname.hvn0
+dhcp
+!/usr/local/libexec/cloud-agent "\$if"
+.Ed
+.Sh FILES
+.Bl -tag -width "/usr/local/libexec/cloud-agentX" -compact
+.It Pa /usr/local/libexec/cloud-agent
+The agent itself.
+.It Pa /usr/local/bin/cms
+The CMS binary that is used to decrypt messages from the Azure frabric.
+.El
+.Sh SEE ALSO
+.Xr meta-data 8 ,
+.Xr vmd 8
+.Sh AUTHORS
+.An Reyk Floeter Aq Mt reyk@openbsd.org
+.\" .Sh CAVEATS
+.\" .Sh BUGS
