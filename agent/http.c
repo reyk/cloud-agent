@@ -33,6 +33,7 @@
 #include <unistd.h>
 
 #include "http.h"
+#include "main.h"
 
 #define DEFAULT_CA_FILE "/etc/ssl/cert.pem"
 
@@ -587,7 +588,7 @@ http_head_parse(const struct http *http, struct httpxfer *trans, size_t *sz)
 		}
 
 		*ccp++ = '\0';
-		while (isspace((int)*ccp))
+		while (isspace((unsigned char)*ccp))
 			ccp++;
 		h[hsz].key = cp;
 		h[hsz++].val = ccp;

@@ -30,7 +30,8 @@
 #include "xml.h"
 
 static int	 cloudinit_fetch(struct system_config *);
-static char	*cloudinit_get(struct system_config *, const char *, size_t *);
+static char	*cloudinit_get(struct system_config *, const char *,
+		    enum strtype);
 
 int
 ec2(struct system_config *sc)
@@ -58,7 +59,7 @@ cloudinit(struct system_config *sc)
 }
 
 static char *
-cloudinit_get(struct system_config *sc, const char *path, size_t *strsz)
+cloudinit_get(struct system_config *sc, const char *path, enum strtype type)
 {
 	struct httpget	*g = NULL;
 	char		*str = NULL;
@@ -68,11 +69,20 @@ cloudinit_get(struct system_config *sc, const char *path, size_t *strsz)
 	g = http_get(&sc->sc_addr, 1,
 	    sc->sc_endpoint, 80, path, NULL, 0, NULL);
 	if (g != NULL && g->code == 200 && g->bodypartsz > 0) {
-		if ((str = calloc(1, g->bodypartsz + 1)) != NULL) {
-			memcpy(str, g->bodypart, g->bodypartsz);
-			if (strsz != NULL)
-				*strsz = g->bodypartsz;
+		switch (type) {
+		case TEXT:
+			/* multi-line string, always printable */
+			str = get_string(g->bodypart, g->bodypartsz);
+			break;
+		case LINE:
+			str = get_line(g->bodypart, g->bodypartsz);
+			break;
+		case WORD:
+			str = get_word(g->bodypart, g->bodypartsz);
+			break;
 		}
+
+		log_debug("%s: '%s'", __func__, str);
 	}
 	http_get_free(g);
 
@@ -90,24 +100,24 @@ cloudinit_fetch(struct system_config *sc)
 
 	/* instance-id */
 	if ((sc->sc_instance = cloudinit_get(sc,
-	    "/latest/meta-data/instance-id", NULL)) == NULL)
+	    "/latest/meta-data/instance-id", WORD)) == NULL)
 		goto fail;
 
 	/* hostname */
 	if ((sc->sc_hostname = cloudinit_get(sc,
-	    "/latest/meta-data/local-hostname", NULL)) == NULL)
+	    "/latest/meta-data/local-hostname", WORD)) == NULL)
 		goto fail;
 
 	/* pubkey */
 	if ((str = cloudinit_get(sc,
-	    "/latest/meta-data/public-keys/0/openssh-key", NULL)) == NULL)
+	    "/latest/meta-data/public-keys/0/openssh-key", LINE)) == NULL)
 		goto fail;
 	if (agent_addpubkey(sc, str, NULL) != 0)
 		goto fail;
 
 	/* optional username - this is an extension by meta-data(8) */
 	if ((str = cloudinit_get(sc,
-	    "/latest/meta-data/username", NULL)) != NULL) {
+	    "/latest/meta-data/username", WORD)) != NULL) {
 		free(sc->sc_username);
 		sc->sc_username = str;
 		str = NULL;
@@ -115,7 +125,7 @@ cloudinit_fetch(struct system_config *sc)
 
 	/* userdata */
 	if ((sc->sc_userdata = cloudinit_get(sc,
-	    "/latest/user-data", &sc->sc_userdatalen)) == NULL)
+	    "/latest/user-data", TEXT)) == NULL)
 		goto fail;
 
 	ret = 0;

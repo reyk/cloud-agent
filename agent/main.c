@@ -23,6 +23,7 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <errno.h>
 
@@ -237,6 +238,53 @@ enable_output(struct system_config *sc, int fd, int oldfd)
 		return (-1);
 
 	return (0);
+}
+
+char *
+get_string(u_int8_t *ptr, size_t len)
+{
+	size_t	 i;
+
+	/*
+	 * We don't use vis(3) here because the string should not be
+	 * modified and only validated for printable characters and proper
+	 * NUL-termination.  From relayd.
+	 */
+	for (i = 0; i < len; i++)
+		if (!(isprint((unsigned char)ptr[i]) ||
+		    isspace((unsigned char)ptr[i])))
+			break;
+
+	return strndup(ptr, i);
+}
+
+char *
+get_line(u_int8_t *ptr, size_t len)
+{
+	size_t	 i;
+
+	/* Like the previous, but without newlines */
+	for (i = 0; i < len; i++)
+		if (!isprint((unsigned char)ptr[i]) ||
+		    (isspace((unsigned char)ptr[i]) &&
+		    !isblank((unsigned char)ptr[i])))
+			break;
+
+	return strndup(ptr, i);
+}
+
+char *
+get_word(u_int8_t *ptr, size_t len)
+{
+	size_t	 i;
+
+	/* Like the previous, but without spaces and newlines */
+	for (i = 0; i < len; i++)
+		if (!isprint((unsigned char)ptr[i]) ||
+		    isspace((unsigned char)ptr[i]))
+			break;
+
+	return strndup(ptr, i);
 }
 
 static struct system_config *
@@ -507,7 +555,7 @@ agent_configure(struct system_config *sc, int noaction)
 	    "#############################################################\n"
 	    "EOF\n",
 	    "a", "/etc/rc.firsttime") != 0)
-		log_warnx("userdata failed");
+		log_warnx("ssh fingerprints failed");
 
 	return (0);
 }

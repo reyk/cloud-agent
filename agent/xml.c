@@ -259,7 +259,7 @@ xml_char_data(void *data, const char *s, int len)
 	off_t		 off = 0;
 
 	for (i = 0; i < len && s[i] != '\0'; i++) {
-		if (!isspace(s[i])) {
+		if (!isspace((unsigned char)s[i])) {
 			ok = 1;
 			break;
 		}

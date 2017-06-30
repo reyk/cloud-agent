@@ -24,6 +24,12 @@
 
 #include "http.h"
 
+enum strtype {
+	WORD,
+	LINE,
+	TEXT
+};
+
 struct ssh_pubkey {
 	char			*ssh_keyval;
 	char			*ssh_keyfp;
@@ -37,8 +43,7 @@ struct system_config {
 	char			*sc_username;
 	char			*sc_password;
 	char			*sc_pubkey;
-	unsigned char		*sc_userdata;
-	size_t			 sc_userdatalen;
+	char			*sc_userdata;
 	char			*sc_endpoint;
 	char			*sc_instance;
 
@@ -65,6 +70,9 @@ int	 shell(const char *, ...);
 int	 shellout(const char *, char **, const char *, ...);
 int	 disable_output(struct system_config *, int);
 int	 enable_output(struct system_config *, int, int);
+char	*get_string(u_int8_t *, size_t);
+char	*get_line(u_int8_t *, size_t);
+char	*get_word(u_int8_t *, size_t);
 int	 agent_addpubkey(struct system_config *, const char *, const char *);
 int	 agent_setpubkey(struct system_config *, const char *, const char *);
 int	 agent_configure(struct system_config *, int);

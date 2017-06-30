@@ -326,7 +326,8 @@ azure_goalstate(struct system_config *sc)
 
 	if ((xe = xml_findl(&xml.ox_root,
 	    "GoalState", "Container", "ContainerId", NULL)) == NULL ||
-	    (az->az_container = strdup(xe->xe_data)) == NULL) {
+	    (az->az_container =
+	    get_word(xe->xe_data, xe->xe_datalen)) == NULL) {
 		log_debug("%s: unexpected container id", __func__);
 		goto done;
 	}
@@ -334,7 +335,8 @@ azure_goalstate(struct system_config *sc)
 	if ((xe = xml_findl(&xml.ox_root,
 	    "GoalState", "Container", "RoleInstanceList",
 	    "RoleInstance", "InstanceId", NULL)) == NULL ||
-	    (sc->sc_instance = strdup(xe->xe_data)) == NULL) {
+	    (sc->sc_instance =
+	    get_word(xe->xe_data, xe->xe_datalen)) == NULL) {
 		log_debug("%s: unexpected instance id", __func__);
 		goto done;
 	}
@@ -649,7 +651,7 @@ azure_getovfenv(struct system_config *sc)
 {
 	struct xml	 xml;
 	struct xmlelem	*xp, *xe, *xk, *xv;
-	const char	*sshfp, *sshval;
+	char		*sshfp, *sshval, *str;
 	int		 mount = 0, ret = -1, fd = -1;
 	FILE		*fp;
 
@@ -698,18 +700,21 @@ azure_getovfenv(struct system_config *sc)
 
 			if ((xv = xml_findl(&xk->xe_head,
 			    "Fingerprint", NULL)) != NULL)
-				sshfp = xv->xe_data;
+				sshfp = get_word(xv->xe_data, xv->xe_datalen);
 			if ((xv = xml_findl(&xk->xe_head,
 			    "Value", NULL)) != NULL)
-				sshval = xv->xe_data;
+				sshval = get_line(xv->xe_data, xv->xe_datalen);
 
 			if (agent_addpubkey(sc, sshval, sshfp) != 0)
 				log_warnx("failed to add ssh pubkey");
+			free(sshfp);
+			free(sshval);
 		}
 	}
 
 	if ((xe = xml_findl(&xp->xe_head, "HostName", NULL)) != NULL) {
-		if ((sc->sc_hostname = strdup(xe->xe_data)) == NULL) {
+		if ((sc->sc_hostname =
+		    get_word(xe->xe_data, xe->xe_datalen)) == NULL) {
 			log_debug("%s: hostname failed", __func__);
 			goto done;
 		}
@@ -717,31 +722,44 @@ azure_getovfenv(struct system_config *sc)
 
 	if ((xe = xml_findl(&xp->xe_head, "UserName", NULL)) != NULL) {
 		free(sc->sc_username);
-		if ((sc->sc_username = strdup(xe->xe_data)) == NULL) {
+		if ((sc->sc_username =
+		    get_word(xe->xe_data, xe->xe_datalen)) == NULL) {
 			log_debug("%s: username failed", __func__);
 			goto done;
 		}
 	}
 
 	if ((xe = xml_findl(&xp->xe_head, "UserPassword", NULL)) != NULL) {
-		if ((sc->sc_password = calloc(1, 128)) == NULL ||
-		    crypt_newhash(xe->xe_data, "bcrypt,a",
-		    sc->sc_password, 128) != 0) {
+		if ((sc->sc_password = calloc(1, 128)) == NULL) {
 			log_debug("%s: password failed", __func__);
 			goto done;
 		}
+		/* Allow any non-NUL character as input */
+		str = strndup(xe->xe_data, xe->xe_datalen);
+		if (str == NULL ||
+		    crypt_newhash(str, "bcrypt,a",
+		    sc->sc_password, 128) != 0) {
+			log_debug("%s: password hashing failed", __func__);
+			free(sc->sc_password);
+			sc->sc_password = NULL;
+			free(str);
+			goto done;
+		}
+		free(str);
 
 		/* Replace unencrypted password with hash */
 		free(xe->xe_tag);
 		xe->xe_tag = strdup("UserPasswordHash");
 
+		/* Update element for xml_print() below */
 		explicit_bzero(xe->xe_data, xe->xe_datalen);
 		free(xe->xe_data);
 		xe->xe_data = strdup(sc->sc_password);
 		xe->xe_datalen = strlen(sc->sc_password);
 	} else if ((xe = xml_findl(&xp->xe_head,
 	    "UserPasswordHash", NULL)) != NULL) {
-		if ((sc->sc_password = strdup(xe->xe_data)) != NULL) {
+		if ((sc->sc_password =
+		    get_word(xe->xe_data, xe->xe_datalen)) != NULL) {
 			log_debug("%s: password hash failed", __func__);
 			goto done;
 		}
