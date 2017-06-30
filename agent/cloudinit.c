@@ -81,8 +81,6 @@ cloudinit_get(struct system_config *sc, const char *path, enum strtype type)
 			str = get_word(g->bodypart, g->bodypartsz);
 			break;
 		}
-
-		log_debug("%s: '%s'", __func__, str);
 	}
 	http_get_free(g);
 

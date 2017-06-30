@@ -765,6 +765,14 @@ azure_getovfenv(struct system_config *sc)
 		}
 	}
 
+	if ((xe = xml_findl(&xp->xe_head, "CustomData", NULL)) != NULL) {
+		if ((sc->sc_userdata =
+		    get_string(xe->xe_data, xe->xe_datalen)) == NULL) {
+			log_debug("%s: userdata failed", __func__);
+			goto done;
+		}
+	}
+
 	if ((fd = open(sc->sc_ovfenv, O_WRONLY|O_CREAT|O_TRUNC, 0600)) == -1 ||
 	    (fp = fdopen(fd, "w")) == NULL) {
 		log_debug("%s: failed to open %s", __func__, sc->sc_ovfenv);
