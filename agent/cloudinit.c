@@ -88,7 +88,7 @@ cloudinit_fetch(struct system_config *sc)
 	sc->sc_addr.ip = sc->sc_endpoint;
 	sc->sc_addr.family = 4;
 
-	/* hostname */
+	/* instance-id */
 	if ((sc->sc_instance = cloudinit_get(sc,
 	    "/latest/meta-data/instance-id", NULL)) == NULL)
 		goto fail;
@@ -104,6 +104,13 @@ cloudinit_fetch(struct system_config *sc)
 		goto fail;
 	if (agent_addpubkey(sc, str, NULL) != 0)
 		goto fail;
+
+	/* optional username - this is an extension by meta-data(8) */
+	if ((str = cloudinit_get(sc,
+	    "/latest/meta-data/username", NULL)) != NULL) {
+		free(sc->sc_username);
+		sc->sc_username = str;
+	}
 
 	/* userdata */
 	if ((sc->sc_userdata = cloudinit_get(sc,
