@@ -110,6 +110,7 @@ cloudinit_fetch(struct system_config *sc)
 	    "/latest/meta-data/username", NULL)) != NULL) {
 		free(sc->sc_username);
 		sc->sc_username = str;
+		str = NULL;
 	}
 
 	/* userdata */
