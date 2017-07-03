@@ -495,12 +495,16 @@ agent_configure(struct system_config *sc, int noaction)
 	    "-m", sc->sc_username, NULL) != 0)
 		log_warnx("username failed");
 
+	if (fileout(sc->sc_username, "w", "/root/.forward") != 0)
+		log_warnx(".forward failed");
+
 	/* password */
 	if (sc->sc_password == NULL) {
 		str1 = "/PasswordAuthentication/"
 		    "s/.*/PasswordAuthentication no/";
-		str2 = "permit keepenv nopass :wheel as root\n"
-		    "permit keepenv nopass root\n";
+		if (asprintf(&str2, "permit keepenv nopass %s as root\n"
+		    "permit keepenv nopass root\n", sc->sc_username) == -1)
+			str2 = NULL;
 	} else {
 		if (!noaction &&
 		    shell("usermod", "-p", sc->sc_password,
@@ -509,13 +513,15 @@ agent_configure(struct system_config *sc, int noaction)
 
 		str1 = "/PasswordAuthentication/"
 		    "s/.*/PasswordAuthentication yes/";
-		str2 = "permit keepenv persist :wheel as root\n"
-		    "permit keepenv nopass root\n";
+		if (asprintf(&str2, "permit keepenv persist %s as root\n"
+		    "permit keepenv nopass root\n", sc->sc_username) == -1)
+			str2 = NULL;
 	}
 
 	/* doas */
-	if (fileout(str2, "w", "/etc/doas.conf") != 0)
+	if (str2 == NULL || fileout(str2, "w", "/etc/doas.conf") != 0)
 		log_warnx("doas failed");
+	free(str2);
 
 	/* ssh configuration */
 	if (sc->sc_password == NULL && !TAILQ_EMPTY(&sc->sc_pubkeys))
