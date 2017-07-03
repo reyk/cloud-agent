@@ -1,7 +1,7 @@
 PROG=		cloud-agent
 SRCS=		main.c xml.c azure.c cloudinit.c http.c log.c
 BINDIR=		/usr/local/libexec
-MANDIR=		/usr/local/share/man/man
+MANDIR=		/usr/local/man/man
 
 MAN=		cloud-agent.8
 
@@ -17,8 +17,5 @@ CFLAGS+=	-Wsign-compare -Wcast-qual
 
 LDADD+=		-lexpat -ltls -lssl -lcrypto
 DPADD+=		${LIBEXPAT} ${LIBTLS} ${LIBSSL} ${LIBCRYPTO}
-
-beforeinstall:
-	mkdir -p ${MANDIR}8
 
 .include <bsd.prog.mk>
