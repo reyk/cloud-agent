@@ -61,7 +61,7 @@ static int	 azure_reporthealth(struct system_config *, const char *);
 int
 azure(struct system_config *sc)
 {
-	int ret = -1;
+	int	 ret = -1;
 
 	/* Apply defaults */
 	if ((sc->sc_username = strdup("azure-user")) == NULL) {
@@ -72,13 +72,19 @@ azure(struct system_config *sc)
 	sc->sc_ovfenv = "/var/db/azure-ovf-env.xml";
 	sc->sc_priv = &az_config;
 
-	if (azure_getendpoint(sc) != 0) {
-		log_warnx("failed to get endpoint");
+	if (azure_getovfenv(sc) != 0) {
+		log_warnx("failed to get ovf-env.xml");
 		goto done;
 	}
 
-	if (azure_getovfenv(sc) != 0) {
-		log_warnx("failed to get ovf-env.xml");
+	if (sc->sc_dryrun) {
+		/* Return after backing up the ovf-env.xml file */
+		ret = 0;
+		goto done;
+	}
+
+	if (azure_getendpoint(sc) != 0) {
+		log_warnx("failed to get endpoint");
 		goto done;
 	}
 
@@ -795,9 +801,9 @@ azure_getovfenv(struct system_config *sc)
 static int
 azure_getendpoint(struct system_config *sc)
 {
-	char			 path[PATH_MAX], buf[BUFSIZ], *ep = NULL;
-	int			 a[4];
-	FILE			*fp;
+	char	 path[PATH_MAX], buf[BUFSIZ], *ep = NULL;
+	int	 a[4];
+	FILE	*fp;
 
 	if ((size_t)snprintf(path, sizeof(path), "/var/db/dhclient.leases.%s",
 	    sc->sc_interface) >= sizeof(path)) {

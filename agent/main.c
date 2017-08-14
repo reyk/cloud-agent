@@ -31,7 +31,8 @@
 #include "xml.h"
 
 __dead void			 usage(void);
-static struct system_config	*agent_init(void);
+static struct system_config	*agent_init(const char *, int);
+static int			 agent_configure(struct system_config *);
 static void			 agent_free(struct system_config *);
 static int			 agent_pf(struct system_config *, int);
 static void			 agent_unconfigure(void);
@@ -288,19 +289,29 @@ get_word(u_int8_t *ptr, size_t len)
 }
 
 static struct system_config *
-agent_init(void)
+agent_init(const char *ifname, int dryrun)
 {
 	struct system_config	*sc;
 
 	if ((sc = calloc(1, sizeof(*sc))) == NULL)
 		return (NULL);
 
+	sc->sc_interface = ifname;
+	sc->sc_dryrun = dryrun ? 1 : 0;
 	TAILQ_INIT(&sc->sc_pubkeys);
 
 	if ((sc->sc_nullfd = open("/dev/null", O_RDWR)) == -1) {
 		free(sc);
 		return (NULL);
 	}
+
+	if (sc->sc_dryrun)
+		return (sc);
+
+	if (agent_pf(sc, 1) != 0)
+		fatalx("pf");
+	if (http_init() == -1)
+		fatalx("http_init");
 
 	return (sc);
 }
@@ -460,8 +471,8 @@ agent_pf(struct system_config *sc, int open)
 	return (ret);
 }
 
-int
-agent_configure(struct system_config *sc, int noaction)
+static int
+agent_configure(struct system_config *sc)
 {
 	struct ssh_pubkey	*ssh;
 	char			*str1, *str2;
@@ -476,25 +487,21 @@ agent_configure(struct system_config *sc, int noaction)
 	}
 	free(str1);
 
-	if (!noaction &&
-	    fileout(sc->sc_instance, "w", "/var/db/cloud-instance") != 0)
+	if (fileout(sc->sc_instance, "w", "/var/db/cloud-instance") != 0)
 		log_warnx("instance failed");
 
 	/* hostname */
 	log_debug("%s: hostname %s", __func__, sc->sc_hostname);
-	if (!noaction &&
-	    fileout(sc->sc_hostname, "w", "/etc/myname") != 0)
+	if (fileout(sc->sc_hostname, "w", "/etc/myname") != 0)
 		log_warnx("hostname failed");
 	else
 		(void)shell("hostname", sc->sc_hostname, NULL);
 
 	/* username */
 	log_debug("%s: username %s", __func__, sc->sc_username);
-	if (!noaction &&
-	    shell("useradd", "-L", "staff", "-G", "wheel",
+	if (shell("useradd", "-L", "staff", "-G", "wheel",
 	    "-m", sc->sc_username, NULL) != 0)
 		log_warnx("username failed");
-
 	if (fileout(sc->sc_username, "w", "/root/.forward") != 0)
 		log_warnx(".forward failed");
 
@@ -506,8 +513,7 @@ agent_configure(struct system_config *sc, int noaction)
 		    "permit keepenv nopass root\n", sc->sc_username) == -1)
 			str2 = NULL;
 	} else {
-		if (!noaction &&
-		    shell("usermod", "-p", sc->sc_password,
+		if (shell("usermod", "-p", sc->sc_password,
 		    sc->sc_username, NULL) != 0)
 			log_warnx("password failed");
 
@@ -540,8 +546,7 @@ agent_configure(struct system_config *sc, int noaction)
 		if (ssh->ssh_keyval == NULL)
 			continue;
 		log_debug("%s: key %s", __func__, ssh->ssh_keyval);
-		if (!noaction &&
-		    fileout(ssh->ssh_keyval, "a",
+		if (fileout(ssh->ssh_keyval, "a",
 		    "/home/%s/.ssh/authorized_keys",
 		    sc->sc_username) != 0)
 			log_warnx("public key failed");
@@ -552,7 +557,7 @@ agent_configure(struct system_config *sc, int noaction)
 	}
 
 	log_debug("%s: %s", __func__, "/etc/rc.firsttime");
-	if (!noaction && fileout("logger -s -t cloud-agent <<EOF\n"
+	if (fileout("logger -s -t cloud-agent <<EOF\n"
 	    "#############################################################\n"
 	    "-----BEGIN SSH HOST KEY FINGERPRINTS-----\n"
 	    "$(for _f in /etc/ssh/ssh_host_*_key.pub;"
@@ -608,13 +613,13 @@ int
 main(int argc, char *const *argv)
 {
 	struct system_config	*sc;
-	int			 verbose = 0, noaction = 0, unconfigure = 0;
+	int			 verbose = 0, dryrun = 0, unconfigure = 0;
 	int			 ch, ret;
 
 	while ((ch = getopt(argc, argv, "nvu")) != -1) {
 		switch (ch) {
 		case 'n':
-			noaction = 1;
+			dryrun = 1;
 			break;
 		case 'v':
 			verbose += 2;
@@ -645,16 +650,8 @@ main(int argc, char *const *argv)
 	if (pledge("stdio cpath rpath wpath exec proc dns inet", NULL) == -1)
 		fatal("pledge");
 
-	if ((sc = agent_init()) == NULL)
+	if ((sc = agent_init(argv[0], dryrun)) == NULL)
 		fatalx("agent");
-
-	sc->sc_interface = argv[0];
-
-	if (agent_pf(sc, 1) != 0)
-		fatalx("pf");
-
-	if (http_init() == -1)
-		fatalx("http_init");
 
 	/*
 	 * XXX Detect cloud with help from hostctl and sysctl
@@ -669,13 +666,18 @@ main(int argc, char *const *argv)
 	else
 		fatal("unsupported cloud interface %s", sc->sc_interface);
 
+	if (sc->sc_dryrun) {
+		agent_free(sc);
+		return (0);
+	}
+
 	if (agent_pf(sc, 0) != 0)
 		fatalx("pf");
 
 	if (pledge("stdio cpath rpath wpath exec proc", NULL) == -1)
 		fatal("pledge");
 
-	if (ret == 0 && agent_configure(sc, noaction) != 0)
+	if (ret == 0 && agent_configure(sc) != 0)
 		fatal("provisioning failed");
 
 	agent_free(sc);

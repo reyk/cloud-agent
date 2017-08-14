@@ -55,6 +55,7 @@ struct system_config {
 	struct ssh_pubkeys	 sc_pubkeys;
 
 	int			 sc_nullfd;
+	int			 sc_dryrun;
 	void			*sc_priv;
 };
 
@@ -75,7 +76,6 @@ char	*get_line(u_int8_t *, size_t);
 char	*get_word(u_int8_t *, size_t);
 int	 agent_addpubkey(struct system_config *, const char *, const char *);
 int	 agent_setpubkey(struct system_config *, const char *, const char *);
-int	 agent_configure(struct system_config *, int);
 
 /* log.c */
 void	log_init(int, int);

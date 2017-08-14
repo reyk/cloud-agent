@@ -96,6 +96,9 @@ cloudinit_fetch(struct system_config *sc)
 	sc->sc_addr.ip = sc->sc_endpoint;
 	sc->sc_addr.family = 4;
 
+	if (sc->sc_dryrun)
+		return (0);
+
 	/* instance-id */
 	if ((sc->sc_instance = cloudinit_get(sc,
 	    "/latest/meta-data/instance-id", WORD)) == NULL)
