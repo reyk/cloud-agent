@@ -77,12 +77,6 @@ azure(struct system_config *sc)
 		goto done;
 	}
 
-	if (sc->sc_dryrun) {
-		/* Return after backing up the ovf-env.xml file */
-		ret = 0;
-		goto done;
-	}
-
 	if (azure_getendpoint(sc) != 0) {
 		log_warnx("failed to get endpoint");
 		goto done;
@@ -98,14 +92,16 @@ azure(struct system_config *sc)
 		goto done;
 	}
 
-	if (azure_keys(sc) != 0) {
-		log_warnx("failed to get transport keys");
-		goto done;
-	}
+	if (!sc->sc_dryrun) {
+		if (azure_keys(sc) != 0) {
+			log_warnx("failed to get transport keys");
+			goto done;
+		}
 
-	if (azure_certificates(sc) != 0) {
-		log_warnx("failed to get certificates");
-		goto done;
+		if (azure_certificates(sc) != 0) {
+			log_warnx("failed to get certificates");
+			goto done;
+		}
 	}
 
 	if (azure_reporthealth(sc, "Ready") != 0) {
