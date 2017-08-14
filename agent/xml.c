@@ -342,9 +342,10 @@ xml_parse(struct xml *env, const char *file)
 	ssize_t		 len;
 
 	if ((fd = open(file, O_RDONLY)) == -1) {
-		log_debug("%s: open %s", __func__, file);
+		log_debug("%s: failed to open %s", __func__, file);
 		return (-1);
-	}
+	} else
+		log_debug("%s: opened %s", __func__, file);
 
 	do {
 		if ((xml = XML_GetBuffer(parser, BUFSIZ)) == NULL)
