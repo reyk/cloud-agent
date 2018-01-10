@@ -51,7 +51,6 @@ static struct httpget
 
 static int	 azure_keys(struct system_config *);
 static int	 azure_getpubkeys(struct system_config *);
-static int	 azure_getendpoint(struct system_config *);
 static int	 azure_getovfenv(struct system_config *);
 static int	 azure_versions(struct system_config *);
 static int	 azure_goalstate(struct system_config *);
@@ -78,7 +77,7 @@ azure(struct system_config *sc)
 		goto done;
 	}
 
-	if (azure_getendpoint(sc) != 0) {
+	if (dhcp_getendpoint(sc) != 0) {
 		log_warnx("failed to get endpoint");
 		goto done;
 	}
@@ -793,54 +792,4 @@ azure_getovfenv(struct system_config *sc)
 		close(fd);
 	xml_free(&xml);
 	return (ret);
-}
-
-static int
-azure_getendpoint(struct system_config *sc)
-{
-	char	 path[PATH_MAX], buf[BUFSIZ], *ep = NULL;
-	int	 a[4];
-	FILE	*fp;
-
-	if ((size_t)snprintf(path, sizeof(path), "/var/db/dhclient.leases.%s",
-	    sc->sc_interface) >= sizeof(path)) {
-		log_debug("%s: invalid path", __func__);
-		return (-1);
-	}
-
-	if ((fp = fopen(path, "r")) == NULL) {
-		log_debug("%s: failed to open %s", __func__, path);
-		return (-1);
-	}
-
-	while (fgets(buf, sizeof(buf), fp) != NULL) {
-		buf[strcspn(buf, ";\n")] = '\0';
-
-		/* Find last occurence of option-245 */
-		if (sscanf(buf, "  option option-245 %x:%x:%x:%x",
-		    &a[0], &a[1], &a[2], &a[3]) == 4) {
-			free(ep);
-			if (asprintf(&ep, "%d.%d.%d.%d",
-			    a[0], a[1], a[2], a[3]) == -1) {
-				log_debug("%s: asprintf", __func__);
-				fclose(fp);
-				return (-1);
-			}
-		}
-	}
-
-	fclose(fp);
-
-	if (ep == NULL) {
-		log_debug("%s: endpoint not found", __func__);
-		return (-1);
-	}
-
-	sc->sc_endpoint = ep;
-	sc->sc_addr.ip = sc->sc_endpoint;
-	sc->sc_addr.family = 4;
-
-	log_debug("%s: %s", __func__, ep);
-
-	return (0);
 }

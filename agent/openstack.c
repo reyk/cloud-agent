@@ -34,7 +34,8 @@ static int	 openstack_fetch(struct system_config *);
 int
 openstack(struct system_config *sc)
 {
-	if ((sc->sc_endpoint = strdup("169.254.169.254")) == NULL) {
+	if ((dhcp_getendpoint(sc) == -1) &&
+	    (sc->sc_endpoint = strdup(DEFAULT_ENDPOINT)) == NULL) {
 		log_warnx("failed to set defaults");
 		return (-1);
 	}
@@ -88,10 +89,8 @@ openstack_fetch(struct system_config *sc)
 		free(str);
 	}
 
-	/* userdata */
-	if ((sc->sc_userdata =
-	    metadata(sc, "/openstack/latest/user-data", TEXT)) == NULL)
-		goto fail;
+	/* userdata (optional) */
+	sc->sc_userdata = metadata(sc, "/openstack/latest/user_data", TEXT);
 
 	ret = 0;
  fail:

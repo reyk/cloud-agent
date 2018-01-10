@@ -26,6 +26,7 @@
 #include "http.h"
 #include "jsmn.h"
 
+#define DEFAULT_ENDPOINT	"169.254.169.254"
 #define CONNECT_TIMEOUT		10 /* in seconds */
 
 enum strtype {
@@ -107,6 +108,7 @@ int	 agent_setpubkey(struct system_config *, const char *, const char *);
 char	*metadata(struct system_config *, const char *, enum strtype);
 char	*metadata_file(struct system_config *, const char *, enum strtype);
 int	 connect_wait(int, const struct sockaddr *, socklen_t);
+int	 dhcp_getendpoint(struct system_config *);
 
 /* log.c */
 void	log_init(int, int);

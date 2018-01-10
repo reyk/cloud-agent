@@ -17,6 +17,7 @@
 #include <sys/wait.h>
 #include <sys/socket.h>
 
+#include <limits.h>
 #include <stdio.h>
 #include <syslog.h>
 #include <stdlib.h>
@@ -717,7 +718,67 @@ connect_wait(int s, const struct sockaddr *name, socklen_t namelen)
 		return (-1);
 	}
 
-	log_debug("%s:%d error %d", __func__, __LINE__, error);
+	return (0);
+}
+
+int
+dhcp_getendpoint(struct system_config *sc)
+{
+	char	 path[PATH_MAX], buf[BUFSIZ], *ep = NULL;
+	int	 a[4], has245 = 0;
+	size_t	 sz;
+	FILE	*fp;
+
+	if ((size_t)snprintf(path, sizeof(path), "/var/db/dhclient.leases.%s",
+	    sc->sc_interface) >= sizeof(path)) {
+		log_debug("%s: invalid path", __func__);
+		return (-1);
+	}
+
+	if ((fp = fopen(path, "r")) == NULL) {
+		log_debug("%s: failed to open %s", __func__, path);
+		return (-1);
+	}
+
+	while (fgets(buf, sizeof(buf), fp) != NULL) {
+		buf[strcspn(buf, ";\n")] = '\0';
+
+		/* Find last occurence of dhcp-server-identifier */
+		sz = strlen("  option dhcp-server-identifier ");
+		if (!has245 &&
+		    strncmp(buf, "  option dhcp-server-identifier ", sz) == 0) {
+			free(ep);
+			if ((ep = strdup(buf + sz)) == NULL) {
+				log_debug("%s: strdup", __func__);
+				fclose(fp);
+				return (-1);
+			}
+		}
+
+		/* Find last occurence of option-245 (only on Azure) */
+		if (sscanf(buf, "  option option-245 %x:%x:%x:%x",
+		    &a[0], &a[1], &a[2], &a[3]) == 4) {
+			has245 = 1;
+			free(ep);
+			if (asprintf(&ep, "%d.%d.%d.%d",
+			    a[0], a[1], a[2], a[3]) == -1) {
+				log_debug("%s: asprintf", __func__);
+				fclose(fp);
+				return (-1);
+			}
+		}
+	}
+
+	fclose(fp);
+
+	if (ep == NULL)
+		return (-1);
+
+	sc->sc_endpoint = ep;
+	sc->sc_addr.ip = sc->sc_endpoint;
+	sc->sc_addr.family = 4;
+
+	log_debug("%s: %s", __func__, ep);
 
 	return (0);
 }

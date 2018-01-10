@@ -36,7 +36,7 @@ ec2(struct system_config *sc)
 {
 	free(sc->sc_username);
 	if ((sc->sc_username = strdup("ec2-user")) == NULL ||
-	    (sc->sc_endpoint = strdup("169.254.169.254")) == NULL) {
+	    (sc->sc_endpoint = strdup(DEFAULT_ENDPOINT)) == NULL) {
 		log_warnx("failed to set defaults");
 		return (-1);
 	}
@@ -47,8 +47,8 @@ ec2(struct system_config *sc)
 int
 cloudinit(struct system_config *sc)
 {
-	/* XXX get endpoint from DHCP lease file */
-	if ((sc->sc_endpoint = strdup("169.254.169.254")) == NULL) {
+	if ((dhcp_getendpoint(sc) == -1) &&
+	    (sc->sc_endpoint = strdup(DEFAULT_ENDPOINT)) == NULL) {
 		log_warnx("failed to set defaults");
 		return (-1);
 	}
@@ -89,9 +89,8 @@ cloudinit_fetch(struct system_config *sc)
 		str = NULL;
 	}
 
-	/* userdata */
-	if ((sc->sc_userdata = metadata(sc, "/latest/user-data", TEXT)) == NULL)
-		goto fail;
+	/* userdata (optional) */
+	sc->sc_userdata = metadata(sc, "/latest/user-data", TEXT);
 
 	ret = 0;
  fail:
