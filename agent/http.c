@@ -277,8 +277,8 @@ again:
 	if (fd == -1) {
 		warn("%s: socket", addrs[cur].ip);
 		goto again;
-	} else if (connect(fd, (struct sockaddr *)&ss, len) == -1) {
-		warn("%s: connect", addrs[cur].ip);
+	} else if (connect_wait(fd, (struct sockaddr *)&ss, len) == -1) {
+		warn("http://%s%s", addrs[cur].ip, path);
 		close(fd);
 		goto again;
 	}

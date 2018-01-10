@@ -1,5 +1,5 @@
 PROG=		cloud-agent
-SRCS=		main.c xml.c azure.c cloudinit.c http.c log.c
+SRCS=		azure.c cloudinit.c http.c json.c jsmn.c log.c openstack.c main.c xml.c
 BINDIR=		/usr/local/libexec
 MANDIR=		/usr/local/man/man
 

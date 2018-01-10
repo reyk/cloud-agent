@@ -26,16 +26,20 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <poll.h>
+#include <err.h>
 
 #include "main.h"
 #include "xml.h"
 
 __dead void			 usage(void);
-static struct system_config	*agent_init(const char *, int);
+static struct system_config	*agent_init(const char *, int, int);
 static int			 agent_configure(struct system_config *);
 static void			 agent_free(struct system_config *);
 static int			 agent_pf(struct system_config *, int);
 static void			 agent_unconfigure(void);
+static char			*metadata_parse(char *, size_t, enum strtype);
+static int			 agent_timeout;
 
 int
 shell(const char *arg, ...)
@@ -289,7 +293,7 @@ get_word(u_int8_t *ptr, size_t len)
 }
 
 static struct system_config *
-agent_init(const char *ifname, int dryrun)
+agent_init(const char *ifname, int dryrun, int timeout)
 {
 	struct system_config	*sc;
 
@@ -298,10 +302,16 @@ agent_init(const char *ifname, int dryrun)
 
 	sc->sc_interface = ifname;
 	sc->sc_dryrun = dryrun ? 1 : 0;
+	sc->sc_timeout = agent_timeout = timeout < 1 ? -1 : timeout * 1000;
 	TAILQ_INIT(&sc->sc_pubkeys);
 
 	if ((sc->sc_nullfd = open("/dev/null", O_RDWR)) == -1) {
 		free(sc);
+		return (NULL);
+	}
+	if ((sc->sc_username = strdup("puffy")) == NULL) {
+		free(sc);
+		close(sc->sc_nullfd);
 		return (NULL);
 	}
 
@@ -599,12 +609,125 @@ agent_unconfigure(void)
 	    "permit keepenv nopass root\n", "w", "/etc/doas.conf");
 }
 
+
+static char *
+metadata_parse(char *s, size_t sz, enum strtype type)
+{
+	char	*str;
+
+	switch (type) {
+	case TEXT:
+		/* multi-line string, always printable */
+		str = get_string(s, sz);
+		break;
+	case LINE:
+		str = get_line(s, sz);
+		break;
+	case WORD:
+		str = get_word(s, sz);
+		break;
+	}
+
+	return (str);
+}
+
+char *
+metadata(struct system_config *sc, const char *path, enum strtype type)
+{
+	struct httpget	*g = NULL;
+	char		*str = NULL;
+
+	log_debug("%s: %s", __func__, path);
+
+	g = http_get(&sc->sc_addr, 1,
+	    sc->sc_endpoint, 80, path, NULL, 0, NULL);
+	if (g != NULL && g->code == 200 && g->bodypartsz > 0)
+		str = metadata_parse(g->bodypart, g->bodypartsz, type);
+	http_get_free(g);
+
+	return (str);
+}
+
+char *
+metadata_file(struct system_config *sc, const char *name, enum strtype type)
+{
+	FILE		*fp, *mfp;
+	char		 buf[BUFSIZ], *mbuf, *str;
+	size_t		 sz, msz;
+
+	if ((fp = fopen(name, "r")) == NULL) {
+		log_warn("%s: could not open %s", __func__, name);
+		return (NULL);
+	}
+
+	if ((mfp = open_memstream(&mbuf, &msz)) == NULL) {
+		log_warn("%s: open_memstream", __func__);
+		fclose(fp);
+		return (NULL);
+	}
+
+	do {
+		if ((sz = fread(buf, 1, sizeof(buf), fp)) < 1)
+			break;
+		if (fwrite(buf, sz, 1, mfp) != 1)
+			break;
+	} while (sz == sizeof(buf));
+
+	fclose(mfp);
+	fclose(fp);
+
+	str = metadata_parse(mbuf, msz, type);
+	free(mbuf);
+
+	return (str);
+}
+
+int
+connect_wait(int s, const struct sockaddr *name, socklen_t namelen)
+{
+	struct pollfd	 pfd[1];
+	int		 error = 0, flag;
+	socklen_t	 errlen = sizeof(error);
+
+	if ((flag = fcntl(s, F_GETFL, 0)) == -1 ||
+	    (fcntl(s, F_SETFL, flag | O_NONBLOCK)) == -1)
+		return (-1);
+
+	error = connect(s, name, namelen);
+	do {
+		pfd[0].fd = s;
+		pfd[0].events = POLLOUT;
+
+		if ((error = poll(pfd, 1, agent_timeout)) == -1)
+			continue;
+		if (error == 0) {
+			error = ETIMEDOUT;
+			goto done;
+		}
+		if (getsockopt(s, SOL_SOCKET, SO_ERROR, &error, &errlen) == -1)
+			continue;
+	} while (error != 0 && error == EINTR);
+
+ done:
+	if (fcntl(s, F_SETFL, flag & ~O_NONBLOCK) == -1)
+		return (-1);
+
+	if (error != 0) {
+		errno = error;
+		return (-1);
+	}
+
+	log_debug("%s:%d error %d", __func__, __LINE__, error);
+
+	return (0);
+}
+
 __dead void
 usage(void)
 {
 	extern char	*__progname;
 
-	fprintf(stderr, "usage: %s [-nuv] interface\n",
+	fprintf(stderr, "usage: %s [-nuv] [-t 3] interface\n",
 	    __progname);
 	exit(1);
 }
@@ -614,15 +737,21 @@ main(int argc, char *const *argv)
 {
 	struct system_config	*sc;
 	int			 verbose = 0, dryrun = 0, unconfigure = 0;
-	int			 ch, ret;
+	int			 ch, ret, timeout = CONNECT_TIMEOUT;
+	const char		*error = NULL;
 
-	while ((ch = getopt(argc, argv, "nvu")) != -1) {
+	while ((ch = getopt(argc, argv, "nvt:u")) != -1) {
 		switch (ch) {
 		case 'n':
 			dryrun = 1;
 			break;
 		case 'v':
 			verbose += 2;
+			break;
+		case 't':
+			timeout = strtonum(optarg, -1, 86400, &error);
+			if (error != NULL)
+				fatalx("invalid timeout: %s", error);
 			break;
 		case 'u':
 			unconfigure = 1;
@@ -650,7 +779,7 @@ main(int argc, char *const *argv)
 	if (pledge("stdio cpath rpath wpath exec proc dns inet", NULL) == -1)
 		fatal("pledge");
 
-	if ((sc = agent_init(argv[0], dryrun)) == NULL)
+	if ((sc = agent_init(argv[0], dryrun, timeout)) == NULL)
 		fatalx("agent");
 
 	/*
@@ -661,10 +790,8 @@ main(int argc, char *const *argv)
 		ret = azure(sc);
 	else if (strcmp("xnf0", sc->sc_interface) == 0)
 		ret = ec2(sc);
-	else if (strcmp("vio0", sc->sc_interface) == 0)
-		ret = cloudinit(sc);
 	else
-		fatal("unsupported cloud interface %s", sc->sc_interface);
+		ret = openstack(sc);
 
 	if (sc->sc_dryrun) {
 		agent_free(sc);

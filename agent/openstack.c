@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 Reyk Floeter <reyk@openbsd.org>
+ * Copyright (c) 2018 Reyk Floeter <reyk@openbsd.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,72 +29,73 @@
 #include "http.h"
 #include "xml.h"
 
-static int	 cloudinit_fetch(struct system_config *);
+static int	 openstack_fetch(struct system_config *);
 
 int
-ec2(struct system_config *sc)
+openstack(struct system_config *sc)
 {
-	free(sc->sc_username);
-	if ((sc->sc_username = strdup("ec2-user")) == NULL ||
-	    (sc->sc_endpoint = strdup("169.254.169.254")) == NULL) {
-		log_warnx("failed to set defaults");
-		return (-1);
-	}
-
-	return (cloudinit_fetch(sc));
-}
-
-int
-cloudinit(struct system_config *sc)
-{
-	/* XXX get endpoint from DHCP lease file */
 	if ((sc->sc_endpoint = strdup("169.254.169.254")) == NULL) {
 		log_warnx("failed to set defaults");
 		return (-1);
 	}
 
-	return (cloudinit_fetch(sc));
+	if (openstack_fetch(sc) != 0) {
+		free(sc->sc_endpoint);
+		return (cloudinit(sc));
+	}
+	return (0);
 }
 
 static int
-cloudinit_fetch(struct system_config *sc)
+openstack_fetch(struct system_config *sc)
 {
-	int		 ret = 0;
-	char		*str = NULL;
+	int		 ret = -1;
+	char		*json = NULL, *str;
+	struct jsmnn	*j = NULL, *o, *f;
+	size_t		 i;
 
 	sc->sc_addr.ip = sc->sc_endpoint;
 	sc->sc_addr.family = 4;
 
+	/* meta_data, we don't handle vendor_data */
+	if ((json = metadata(sc,
+	    "/openstack/latest/meta_data.json", TEXT)) == NULL)
+		goto fail;
+
+	if ((j = json_parse(json, strlen(json))) == NULL)
+		goto fail;
+
 	/* instance-id */
-	if ((sc->sc_instance = metadata(sc,
-	    "/latest/meta-data/instance-id", WORD)) == NULL)
+	if ((sc->sc_instance = json_getstr(j, "uuid")) == NULL)
 		goto fail;
 
 	/* hostname */
-	if ((sc->sc_hostname = metadata(sc,
-	    "/latest/meta-data/local-hostname", WORD)) == NULL)
+	if ((sc->sc_hostname = json_getstr(j, "hostname")) == NULL)
 		goto fail;
 
-	/* pubkey */
-	if ((str = metadata(sc,
-	    "/latest/meta-data/public-keys/0/openssh-key", LINE)) == NULL)
+	/* public keys */
+	if ((o = json_getarray(j, "keys")) == NULL)
 		goto fail;
-	if (agent_addpubkey(sc, str, NULL) != 0)
-		goto fail;
-
-	/* optional username - this is an extension by meta-data(8) */
-	if ((str = metadata(sc, "/latest/meta-data/username", WORD)) != NULL) {
-		free(sc->sc_username);
-		sc->sc_username = str;
-		str = NULL;
+	for (i = 0; i < o->fields; i++) {
+		if ((f = json_getarrayobj(o->d.array[i])) == NULL)
+			continue;
+		if ((str = json_getstr(f, "data")) == NULL)
+			continue;
+		if (agent_addpubkey(sc, str, NULL) != 0) {
+			free(str);
+			goto fail;
+		}
+		free(str);
 	}
 
 	/* userdata */
-	if ((sc->sc_userdata = metadata(sc, "/latest/user-data", TEXT)) == NULL)
+	if ((sc->sc_userdata =
+	    metadata(sc, "/openstack/latest/user-data", TEXT)) == NULL)
 		goto fail;
 
 	ret = 0;
  fail:
-	free(str);
+	json_free(j);
+	free(json);
 	return (ret);
 }

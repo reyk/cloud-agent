@@ -19,10 +19,14 @@
 
 #include <sys/queue.h>
 #include <sys/cdefs.h>
+#include <sys/socket.h>
 #include <stdarg.h>
 #include <stddef.h>
 
 #include "http.h"
+#include "jsmn.h"
+
+#define CONNECT_TIMEOUT		10 /* in seconds */
 
 enum strtype {
 	WORD,
@@ -46,6 +50,7 @@ struct system_config {
 	char			*sc_userdata;
 	char			*sc_endpoint;
 	char			*sc_instance;
+	int			 sc_timeout;
 
 	const char		*sc_ovfenv;
 	const char		*sc_interface;
@@ -59,12 +64,35 @@ struct system_config {
 	void			*sc_priv;
 };
 
+struct	jsmnp;
+struct	jsmnn {
+	struct parse		*p;
+	union {
+		char		*str;
+		struct jsmnp	*obj;
+		struct jsmnn	**array;
+	} d;
+	size_t			 fields;
+	jsmntype_t		 type;
+};
+
+/* json.c */
+struct jsmnn	*json_parse(const char *, size_t);
+void		 json_free(struct jsmnn *);
+struct jsmnn	*json_getarrayobj(struct jsmnn *);
+struct jsmnn	*json_getarray(struct jsmnn *, const char *);
+struct jsmnn	*json_getobj(struct jsmnn *, const char *);
+char		*json_getstr(struct jsmnn *, const char *);
+
 /* azure.c */
 int	 azure(struct system_config *);
 
 /* cloudinit.c */
 int	 ec2(struct system_config *);
 int	 cloudinit(struct system_config *);
+
+/* openstack.c */
+int	 openstack(struct system_config *);
 
 /* main.c */
 int	 shell(const char *, ...);
@@ -76,6 +104,9 @@ char	*get_line(u_int8_t *, size_t);
 char	*get_word(u_int8_t *, size_t);
 int	 agent_addpubkey(struct system_config *, const char *, const char *);
 int	 agent_setpubkey(struct system_config *, const char *, const char *);
+char	*metadata(struct system_config *, const char *, enum strtype);
+char	*metadata_file(struct system_config *, const char *, enum strtype);
+int	 connect_wait(int, const struct sockaddr *, socklen_t);
 
 /* log.c */
 void	log_init(int, int);

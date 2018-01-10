@@ -64,6 +64,7 @@ azure(struct system_config *sc)
 	int	 ret = -1;
 
 	/* Apply defaults */
+	free(sc->sc_username);
 	if ((sc->sc_username = strdup("azure-user")) == NULL) {
 		log_warnx("failed to set default user");
 		goto done;
