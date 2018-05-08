@@ -493,8 +493,6 @@ agent_configure(struct system_config *sc)
 {
 	struct ssh_pubkey	*ssh;
 	char			*str1, *str2;
-	unsigned char		*userdata;
-	size_t			 len;
 
 	/* Skip configuration on the same instance */
 	if ((str1 = filein("r", "/var/db/cloud-instance")) != NULL) {
@@ -572,18 +570,9 @@ agent_configure(struct system_config *sc)
 	}
 
 	if (sc->sc_userdata) {
-		/*
-		 * The decoded base64 string is smaller than the
-		 * userdata;  it is safe to allocate the same length.
-		 */
-		len = strlen(sc->sc_userdata);
-		if ((userdata = calloc(1, len + 1)) == NULL)
-			log_warnx("failed to allocate user-data");
-		else if ((len = b64_pton(sc->sc_userdata, userdata, len)) < 1)
-			log_warnx("failed to decode user-data");
-		else
-			(void)agent_userdata(userdata, len);
-		free(userdata);
+		if (agent_userdata(sc->sc_userdata,
+		    strlen(sc->sc_userdata)) != 0)
+			log_warnx("user-data failed");
 	}
 
 	log_debug("%s: %s", __func__, "/etc/rc.firsttime");
@@ -608,10 +597,28 @@ agent_userdata(const unsigned char *userdata, size_t len)
 	const char	*file;
 	int		 ret = -1;
 
-	/* XXX add support for gzip-encoded user-data */
-	if ((shebang = get_line(userdata, len)) == NULL) {
-		log_warnx("failed to decode shebang from user-data");
+	if (len <= 2) {
+		log_warnx("user-data too short");
 		goto fail;
+	}
+
+	if (userdata[0] == 0x1f && userdata[1] == 0x8b) {
+		log_warnx("gzip-compressed user-data is not supported");
+		goto fail;
+	} else if (userdata[0] == '#') {
+		if ((shebang = get_line(userdata, len)) == NULL) {
+			log_warnx("failed to decode shebang from user-data");
+			goto fail;
+		}
+	} else if (isprint(userdata[0]) && isprint(userdata[1])) {
+		/* Decode user-data and call the function again */
+		if ((str = calloc(1, len + 1)) == NULL ||
+		    (len = b64_pton(userdata, str, len)) < 1 ||
+		    agent_userdata(str, len) != 0) {
+			log_warnx("failed to decode user-data");
+			goto fail;
+		}
+		goto done;
 	}
 
 	log_debug("%s: user-data: %s", __func__, shebang);
@@ -641,6 +648,7 @@ agent_userdata(const unsigned char *userdata, size_t len)
 	    fileout(line, "a", "/etc/rc.firsttime") != 0)
 		log_warnx("failed to add user-data script");
 
+ done:
 	ret = 0;
  fail:
 	free(line);
