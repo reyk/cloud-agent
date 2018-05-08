@@ -16,6 +16,9 @@
 
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+
+#include <netinet/in.h>
 
 #include <limits.h>
 #include <stdio.h>
@@ -24,6 +27,7 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
+#include <resolv.h>
 #include <ctype.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -38,8 +42,10 @@ static struct system_config	*agent_init(const char *, int, int);
 static int			 agent_configure(struct system_config *);
 static void			 agent_free(struct system_config *);
 static int			 agent_pf(struct system_config *, int);
+static int			 agent_userdata(const unsigned char *, size_t);
 static void			 agent_unconfigure(void);
 static char			*metadata_parse(char *, size_t, enum strtype);
+
 static int			 agent_timeout;
 
 int
@@ -247,7 +253,7 @@ enable_output(struct system_config *sc, int fd, int oldfd)
 }
 
 char *
-get_string(u_int8_t *ptr, size_t len)
+get_string(const unsigned char *ptr, size_t len)
 {
 	size_t	 i;
 
@@ -265,7 +271,7 @@ get_string(u_int8_t *ptr, size_t len)
 }
 
 char *
-get_line(u_int8_t *ptr, size_t len)
+get_line(const unsigned char *ptr, size_t len)
 {
 	size_t	 i;
 
@@ -280,7 +286,7 @@ get_line(u_int8_t *ptr, size_t len)
 }
 
 char *
-get_word(u_int8_t *ptr, size_t len)
+get_word(const unsigned char *ptr, size_t len)
 {
 	size_t	 i;
 
@@ -487,6 +493,8 @@ agent_configure(struct system_config *sc)
 {
 	struct ssh_pubkey	*ssh;
 	char			*str1, *str2;
+	unsigned char		*userdata;
+	size_t			 len;
 
 	/* Skip configuration on the same instance */
 	if ((str1 = filein("r", "/var/db/cloud-instance")) != NULL) {
@@ -564,7 +572,18 @@ agent_configure(struct system_config *sc)
 	}
 
 	if (sc->sc_userdata) {
-		/* XXX */
+		/*
+		 * The decoded base64 string is smaller than the
+		 * userdata;  it is safe to allocate the same length.
+		 */
+		len = strlen(sc->sc_userdata);
+		if ((userdata = calloc(1, len + 1)) == NULL)
+			log_warnx("failed to allocate user-data");
+		else if ((len = b64_pton(sc->sc_userdata, userdata, len)) < 1)
+			log_warnx("failed to decode user-data");
+		else
+			(void)agent_userdata(userdata, len);
+		free(userdata);
 	}
 
 	log_debug("%s: %s", __func__, "/etc/rc.firsttime");
@@ -580,6 +599,55 @@ agent_configure(struct system_config *sc)
 		log_warnx("ssh fingerprints failed");
 
 	return (0);
+}
+
+static int
+agent_userdata(const unsigned char *userdata, size_t len)
+{
+	char		*shebang = NULL, *str = NULL, *line = NULL;
+	const char	*file;
+	int		 ret = -1;
+
+	/* XXX add support for gzip-encoded user-data */
+	if ((shebang = get_line(userdata, len)) == NULL) {
+		log_warnx("failed to decode shebang from user-data");
+		goto fail;
+	}
+
+	log_debug("%s: user-data: %s", __func__, shebang);
+
+	if (strlen(shebang) <= 2 || strncmp("#!", shebang, 2) != 0) {
+		log_warnx("unsupported user-data type");
+		goto fail;
+	}
+
+	/* now get the whole script */
+	if ((str = get_string(userdata, len)) == NULL) {
+		log_warnx("invalid user-data script");
+		goto fail;
+	}
+
+	/* write user-data script into file */
+	file = "/var/run/user-data";
+	if (fileout(str, "w", file) != 0) {
+		log_warnx("failed to write user-data");
+		goto fail;
+	}
+
+	/* and call it from rc.firsttime later on boot */
+	if (asprintf(&line,
+	    "logger -s -t cloud-agent \"running %s\"\n"
+	    "%s %s\nrm %s\n", file, shebang + 2, file, file) == -1 ||
+	    fileout(line, "a", "/etc/rc.firsttime") != 0)
+		log_warnx("failed to add user-data script");
+
+	ret = 0;
+ fail:
+	free(line);
+	free(str);
+	free(shebang);
+
+	return (ret);
 }
 
 void
@@ -638,10 +706,11 @@ metadata(struct system_config *sc, const char *path, enum strtype type)
 	struct httpget	*g = NULL;
 	char		*str = NULL;
 
-	log_debug("%s: %s", __func__, path);
-
 	g = http_get(&sc->sc_addr, 1,
 	    sc->sc_endpoint, 80, path, NULL, 0, NULL);
+	if (g != NULL)
+		log_debug("%s: HTTP %d %s", __func__, g->code, path);
+
 	if (g != NULL && g->code == 200 && g->bodypartsz > 0)
 		str = metadata_parse(g->bodypart, g->bodypartsz, type);
 	http_get_free(g);
