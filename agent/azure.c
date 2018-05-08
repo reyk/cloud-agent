@@ -66,7 +66,7 @@ azure(struct system_config *sc)
 	free(sc->sc_username);
 	if ((sc->sc_username = strdup("azure-user")) == NULL) {
 		log_warnx("failed to set default user");
-		goto done;
+		goto fail;
 	}
 	sc->sc_cdrom = "/dev/cd0c";
 	sc->sc_ovfenv = "/var/db/azure-ovf-env.xml";
@@ -74,43 +74,43 @@ azure(struct system_config *sc)
 
 	if (azure_getovfenv(sc) != 0) {
 		log_warnx("failed to get ovf-env.xml");
-		goto done;
+		goto fail;
 	}
 
 	if (dhcp_getendpoint(sc) != 0) {
 		log_warnx("failed to get endpoint");
-		goto done;
+		goto fail;
 	}
 
 	if (azure_versions(sc) != 0) {
 		log_warnx("failed to get endpoint versions");
-		goto done;
+		goto fail;
 	}
 
 	if (azure_goalstate(sc) != 0) {
 		log_warnx("failed to get goalstate");
-		goto done;
+		goto fail;
 	}
 
 	if (!sc->sc_dryrun) {
 		if (azure_keys(sc) != 0) {
 			log_warnx("failed to get transport keys");
-			goto done;
+			goto fail;
 		}
 
 		if (azure_certificates(sc) != 0) {
 			log_warnx("failed to get certificates");
-			goto done;
+			goto fail;
 		}
 	}
 
 	if (azure_reporthealth(sc, "Ready") != 0) {
 		log_warnx("failed to report health");
-		goto done;
+		goto fail;
 	}
 
 	ret = 0;
- done:
+ fail:
 	free(az_config.az_container);
 	free(az_config.az_pubkeyval);
 
