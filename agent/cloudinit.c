@@ -75,13 +75,13 @@ cloudinit_fetch(struct system_config *sc)
 	    "/latest/meta-data/local-hostname", WORD)) == NULL)
 		goto fail;
 
-	/* pubkey */
+	/* optional pubkey */
 	if ((str = metadata(sc,
 	    "/latest/meta-data/public-keys/0/openssh-key", LINE)) == NULL &&
 	    (str = metadata(sc,
 	    "/latest/meta-data/public-keys", LINE)) == NULL)
-		goto fail;
-	if (agent_addpubkey(sc, str, NULL) != 0)
+		log_warnx("failed to get public key");
+	else if (agent_addpubkey(sc, str, NULL) != 0)
 		goto fail;
 
 	/* optional username - this is an extension by meta-data(8) */
