@@ -59,7 +59,7 @@ cloudinit(struct system_config *sc)
 static int
 cloudinit_fetch(struct system_config *sc)
 {
-	int		 ret = 0;
+	int		 ret = -1;
 	char		*str = NULL;
 
 	sc->sc_addr.ip = sc->sc_endpoint;
