@@ -635,7 +635,7 @@ agent_userdata(const unsigned char *userdata, size_t len)
 	}
 
 	/* write user-data script into file */
-	file = "/var/run/user-data";
+	file = "/etc/rc.user-data";
 	if (fileout(str, "w", file) != 0) {
 		log_warnx("failed to write user-data");
 		goto fail;
@@ -643,8 +643,8 @@ agent_userdata(const unsigned char *userdata, size_t len)
 
 	/* and call it from rc.firsttime later on boot */
 	if (asprintf(&line,
-	    "logger -s -t cloud-agent \"running %s\"\n"
-	    "%s %s\nrm %s\n", file, shebang + 2, file, file) == -1 ||
+	    "logger -s -t cloud-agent \"running user-data\"\n"
+	    "%s %s\nrm %s\n", shebang + 2, file, file) == -1 ||
 	    fileout(line, "a", "/etc/rc.firsttime") != 0)
 		log_warnx("failed to add user-data script");
 
