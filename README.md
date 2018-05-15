@@ -1,8 +1,6 @@
 cloud-agent for OpenBSD
 =======================
 
-**This is just experimental.  Be warned.**
-
 This is a simple OpenBSD-specific agent that aims to handle
 provisioning and cloud initialization on public clouds such as
 Microsoft Azure and Amazon AWS.  For OpenBSD on Azure, it is a minimal
@@ -31,7 +29,11 @@ Installation is easy, `cloud-agent` detects the cloud type automatically.
 
 * On Amazon AWS, create a file `/etc/hostname.xnf0`
 
+* On Exoscale, create a file `/etc/hostname.vio0`
+
 * On OpenBSD VMM (with meta-data), create a file `/etc/hostname.vio0`
+
+* On OpenStack/VMware, create a file `/etc/hostname.vmx0`
 
 * The content of the file is identical for all of them:
 
