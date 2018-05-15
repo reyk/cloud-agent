@@ -387,7 +387,7 @@ int cms_DigestAlgorithm_find_ctx(EVP_MD_CTX *mctx, BIO *chain,
 #if LIBRESSL_VERSION_NUMBER >= 0x2080000fL
     const ASN1_OBJECT *mdoid;
 #else
-    const ASN1_OBJECT *mdoid;
+    ASN1_OBJECT *mdoid;
 #endif
     X509_ALGOR_get0(&mdoid, NULL, NULL, mdalg);
     nid = OBJ_obj2nid(mdoid);
