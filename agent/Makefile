@@ -15,7 +15,7 @@ CFLAGS+=	-Wmissing-declarations
 CFLAGS+=	-Wshadow -Wpointer-arith
 CFLAGS+=	-Wsign-compare -Wcast-qual
 
-LDADD+=		-lexpat -ltls
+LDADD+=		-lexpat -ltls -lssl -lcrypto
 DPADD+=		${LIBEXPAT} ${LIBTLS} ${LIBSSL} ${LIBCRYPTO}
 
 .include <bsd.prog.mk>
