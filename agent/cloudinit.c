@@ -41,6 +41,7 @@ ec2(struct system_config *sc)
 		return (-1);
 	}
 
+	sc->sc_stack = "ec2";
 	return (cloudinit_fetch(sc));
 }
 
@@ -53,6 +54,7 @@ cloudinit(struct system_config *sc)
 		return (-1);
 	}
 
+	sc->sc_stack = "cloudinit";
 	return (cloudinit_fetch(sc));
 }
 

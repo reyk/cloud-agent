@@ -44,6 +44,7 @@ openstack(struct system_config *sc)
 		free(sc->sc_endpoint);
 		return (cloudinit(sc));
 	}
+
 	return (0);
 }
 
@@ -62,6 +63,7 @@ openstack_fetch(struct system_config *sc)
 	if ((json = metadata(sc,
 	    "/openstack/latest/meta_data.json", TEXT)) == NULL)
 		goto fail;
+	sc->sc_stack = "openstack";
 
 	if ((j = json_parse(json, strlen(json))) == NULL)
 		goto fail;

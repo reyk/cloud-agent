@@ -62,13 +62,14 @@ azure(struct system_config *sc)
 {
 	int	 ret = -1;
 
+	sc->sc_stack = "azure";
+
 	/* Apply defaults */
 	free(sc->sc_username);
 	if ((sc->sc_username = strdup("azure-user")) == NULL) {
 		log_warnx("failed to set default user");
 		goto fail;
 	}
-	sc->sc_cdrom = "/dev/cd0c";
 	sc->sc_ovfenv = "/var/db/azure-ovf-env.xml";
 	sc->sc_priv = &az_config;
 
@@ -654,35 +655,21 @@ azure_getovfenv(struct system_config *sc)
 	struct xml	 xml;
 	struct xmlelem	*xp, *xe, *xk, *xv;
 	char		*sshfp, *sshval, *str;
-	int		 mount = 0, ret = -1, fd = -1;
+	int		 ret = -1, fd = -1;
 	FILE		*fp;
-
-	/* Silently try to mount the cdrom */
-	fd = disable_output(sc, STDERR_FILENO);
-	ret = shell("mount", "-r", sc->sc_cdrom, "/mnt", NULL);
-	enable_output(sc, STDERR_FILENO, fd);
-	fd = -1;
-
-	if (ret == 0) {
-		log_debug("%s: mounted %s", __func__, sc->sc_cdrom);
-		mount = 1;
-	}
-	ret = -1;
 
 	if (xml_init(&xml) != 0) {
 		log_debug("%s: xml", __func__);
 		goto done;
 	}
 
-	/* Fallback to and older ovf-env.xml file */
+	/*
+	 * Assume that the cdrom is already mounted.
+	 * Fallback to and older ovf-env.xml file.
+	 */
 	if (xml_parse(&xml, "/mnt/ovf-env.xml") == -1 &&
 	    xml_parse(&xml, sc->sc_ovfenv) == -1)
 		goto done;
-
-	/* unmount if we mounted the cdrom before */
-	if (mount && shell("umount", "/mnt", NULL) == 0) {
-		log_debug("%s: unmounted %s", __func__, sc->sc_cdrom);
-	}
 
 	if ((xp = xml_findl(&xml.ox_root,
 	    "Environment", "wa:ProvisioningSection",

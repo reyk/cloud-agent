@@ -35,6 +35,9 @@ Installation is easy, `cloud-agent` detects the cloud type automatically.
 
 * On OpenStack/VMware, create a file `/etc/hostname.vmx0`
 
+* On OpenNebula, create a file `/etc/hostname.if`
+  where _if_ is the name of your primary interface.
+
 * The content of the file is identical for all of them:
 
 		dhcp

@@ -43,7 +43,31 @@ struct ssh_pubkey {
 };
 TAILQ_HEAD(ssh_pubkeys, ssh_pubkey);
 
+enum net_type {
+	NET_IP,
+	NET_MASK,
+	NET_PREFIX,
+	NET_MAC,
+	NET_MTU,
+	NET_GATEWAY,
+	NET_DNS,
+	NET_MAX
+};
+
+struct net_addr {
+	enum net_type		 net_type;
+	unsigned int		 net_ifunit;
+	char			*net_value;
+	struct sockaddr_storage	 net_addr;
+	unsigned int		 net_num;
+
+	TAILQ_ENTRY(net_addr)	 net_entry;
+};
+TAILQ_HEAD(net_addrs, net_addr);
+
 struct system_config {
+	const char		*sc_stack;
+
 	char			*sc_hostname;
 	char			*sc_username;
 	char			*sc_password;
@@ -56,9 +80,14 @@ struct system_config {
 	const char		*sc_ovfenv;
 	const char		*sc_interface;
 	const char		*sc_cdrom;
+	int			 sc_mount;
 
 	struct source		 sc_addr;
 	struct ssh_pubkeys	 sc_pubkeys;
+
+	int			 sc_network;
+	struct net_addrs	 sc_netaddrs;
+	unsigned int		 sc_netmtu;
 
 	int			 sc_nullfd;
 	int			 sc_dryrun;
@@ -92,6 +121,9 @@ int	 azure(struct system_config *);
 int	 ec2(struct system_config *);
 int	 cloudinit(struct system_config *);
 
+/* opennebula.c */
+int	 opennebula(struct system_config *);
+
 /* openstack.c */
 int	 openstack(struct system_config *);
 
@@ -105,6 +137,10 @@ char	*get_line(const unsigned char *, size_t);
 char	*get_word(const unsigned char *, size_t);
 int	 agent_addpubkey(struct system_config *, const char *, const char *);
 int	 agent_setpubkey(struct system_config *, const char *, const char *);
+struct net_addr *
+	 agent_getnetaddr(struct system_config *, struct net_addr *);
+int	 agent_addnetaddr(struct system_config *, unsigned int,
+	    const char *, int, enum net_type);
 char	*metadata(struct system_config *, const char *, enum strtype);
 char	*metadata_file(struct system_config *, const char *, enum strtype);
 int	 connect_wait(int, const struct sockaddr *, socklen_t);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 Reyk Floeter <reyk@openbsd.org>
+ * Copyright (c) 2017, 2018 Reyk Floeter <reyk@openbsd.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,19 +15,24 @@
  */
 
 #include <sys/wait.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 
+#include <net/if.h>
 #include <netinet/in.h>
+#include <netinet/if_ether.h>
 
 #include <limits.h>
 #include <stdio.h>
 #include <syslog.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
 #include <resolv.h>
+#include <netdb.h>
 #include <ctype.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -40,6 +45,7 @@
 __dead void			 usage(void);
 static struct system_config	*agent_init(const char *, int, int);
 static int			 agent_configure(struct system_config *);
+static int			 agent_network(struct system_config *);
 static void			 agent_free(struct system_config *);
 static int			 agent_pf(struct system_config *, int);
 static int			 agent_userdata(const unsigned char *, size_t);
@@ -303,14 +309,17 @@ static struct system_config *
 agent_init(const char *ifname, int dryrun, int timeout)
 {
 	struct system_config	*sc;
+	int			 fd, ret;
 
 	if ((sc = calloc(1, sizeof(*sc))) == NULL)
 		return (NULL);
 
 	sc->sc_interface = ifname;
+	sc->sc_cdrom = "/dev/cd0c";
 	sc->sc_dryrun = dryrun ? 1 : 0;
 	sc->sc_timeout = agent_timeout = timeout < 1 ? -1 : timeout * 1000;
 	TAILQ_INIT(&sc->sc_pubkeys);
+	TAILQ_INIT(&sc->sc_netaddrs);
 
 	if ((sc->sc_nullfd = open("/dev/null", O_RDWR)) == -1) {
 		free(sc);
@@ -320,6 +329,15 @@ agent_init(const char *ifname, int dryrun, int timeout)
 		free(sc);
 		close(sc->sc_nullfd);
 		return (NULL);
+	}
+
+	/* Silently try to mount the cdrom */
+	fd = disable_output(sc, STDERR_FILENO);
+	ret = shell("mount", "-r", sc->sc_cdrom, "/mnt", NULL);
+	enable_output(sc, STDERR_FILENO, fd);
+	if (ret == 0) {
+		log_debug("%s: mounted %s", __func__, sc->sc_cdrom);
+		sc->sc_mount = 1;
 	}
 
 	if (sc->sc_dryrun)
@@ -337,6 +355,12 @@ static void
 agent_free(struct system_config *sc)
 {
 	struct ssh_pubkey	*ssh;
+	struct net_addr		*net;
+
+	/* unmount if we mounted the cdrom before */
+	if (sc->sc_mount && shell("umount", "/mnt", NULL) == 0) {
+		log_debug("%s: unmounted %s", __func__, sc->sc_cdrom);
+	}
 
 	free(sc->sc_hostname);
 	free(sc->sc_username);
@@ -351,6 +375,12 @@ agent_free(struct system_config *sc)
 		free(ssh->ssh_keyfp);
 		TAILQ_REMOVE(&sc->sc_pubkeys, ssh, ssh_entry);
 		free(ssh);
+	}
+
+	while ((net = TAILQ_FIRST(&sc->sc_netaddrs))) {
+		TAILQ_REMOVE(&sc->sc_netaddrs, net, net_entry);
+		free(net->net_value);
+		free(net);
 	}
 }
 
@@ -403,6 +433,103 @@ agent_setpubkey(struct system_config *sc, const char *sshval, const char *sshfp)
 	}
 
 	return (ret);
+}
+
+struct net_addr *
+agent_getnetaddr(struct system_config *sc, struct net_addr *net)
+{
+	struct net_addr		*na;
+
+	TAILQ_FOREACH(na, &sc->sc_netaddrs, net_entry) {
+		if (na->net_type != net->net_type)
+			continue;
+		if (na->net_ifunit != net->net_ifunit)
+			continue;
+		if (net->net_addr.ss_family != AF_UNSPEC) {
+			if (na->net_addr.ss_family !=
+			    net->net_addr.ss_family)
+				continue;
+			if (memcmp(&na->net_addr, &net->net_addr,
+			    na->net_addr.ss_len) != 0)
+				continue;
+		}
+
+		return (na);
+	}
+
+	return (NULL);
+}
+
+int
+agent_addnetaddr(struct system_config *sc, unsigned int unit,
+    const char *value, int af, enum net_type type)
+{
+	const char		*errstr;
+	struct addrinfo		 hints, *res;
+	struct net_addr		*net, *na;
+
+	if ((net = calloc(1, sizeof(*net))) == NULL) {
+		log_debug("%s: calloc", __func__);
+		return (-1);
+	}
+	net->net_ifunit = unit;
+	net->net_type = type;
+
+	switch (type) {
+	case NET_MAC:
+		if (ether_aton(value) == NULL) {
+			log_debug("%s: if%u mac %s", __func__, unit, value);
+			free(net);
+			return (-1);
+		}
+		break;
+	case NET_MTU:
+	case NET_PREFIX:
+		net->net_num = strtonum(value, 0, UINT32_MAX, &errstr);
+		if (errstr != NULL) {
+			log_debug("%s: if%u %s", __func__, unit, value);
+			free(net);
+			return (-1);
+		}
+		break;
+	default:
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_family = af;
+		hints.ai_socktype = SOCK_DGRAM;
+		hints.ai_flags = AI_NUMERICHOST;
+		if (getaddrinfo(value, "0", &hints, &res) != 0) {
+			log_debug("%s: invalid address %s",
+			    __func__, value);
+			free(net);
+			return (-1);
+		}
+
+		if (res->ai_addrlen > sizeof(net->net_addr)) {
+			log_debug("%s: address too long",
+			    __func__);
+			free(net);
+			freeaddrinfo(res);
+			return (-1);
+		}
+		memcpy(&net->net_addr, res->ai_addr, res->ai_addrlen);
+		net->net_addr.ss_len = res->ai_addrlen;
+		net->net_addr.ss_family = res->ai_family;
+	}
+
+	/* Address already exists, ignore new entry */
+	if ((na = agent_getnetaddr(sc, net)) != NULL) {
+		free(net);
+		return (0);
+	}
+
+	if ((net->net_value = strdup(value)) == NULL) {
+		free(net);
+		return (-1);
+	}
+
+	TAILQ_INSERT_TAIL(&sc->sc_netaddrs, net, net_entry);
+
+	return (0);
 }
 
 static int
@@ -575,6 +702,9 @@ agent_configure(struct system_config *sc)
 			log_warnx("user-data failed");
 	}
 
+	if (agent_network(sc) != 0)
+		log_warnx("network configuration failed");
+
 	log_debug("%s: %s", __func__, "/etc/rc.firsttime");
 	if (fileout("logger -s -t cloud-agent <<EOF\n"
 	    "#############################################################\n"
@@ -656,6 +786,55 @@ agent_userdata(const unsigned char *userdata, size_t len)
 	free(shebang);
 
 	return (ret);
+}
+
+static int
+agent_network(struct system_config *sc)
+{
+	struct net_addr	*net;
+	char		 ift[16], ifname[16], line[1024], path[PATH_MAX];
+	const char	*family;
+
+	if (!sc->sc_network)
+		return (0);
+
+	if (strlcpy(ift, sc->sc_interface, sizeof(ift)) >= sizeof(ift))
+		return (-1);
+	ift[strcspn(ift, "0123456789")] = '\0';
+
+	TAILQ_FOREACH(net, &sc->sc_netaddrs, net_entry) {
+		snprintf(ifname, sizeof(ifname), "%s%u", ift, net->net_ifunit);
+		switch (net->net_type) {
+		case NET_IP:
+			family = net->net_addr.ss_family == AF_INET ?
+			    "inet" : "inet6";
+			/* XXX prefix */
+
+			/* hostname.if startup configuration */
+			snprintf(line, sizeof(line), "%s alias %s",
+			    family, net->net_value);
+			snprintf(path, sizeof(path),
+			    "/etc/hostname.%s", ifname);
+			fileout(line, "a", path);
+
+			/* runtime configuration */
+			(void)shell("ifconfig", ifname, family,
+			    "alias", net->net_value, NULL);
+			break;
+		case NET_GATEWAY:
+			fileout(net->net_value, "a", "/etc/mygate");
+			break;
+		case NET_DNS:
+			snprintf(line, sizeof(line), "nameserver %s",
+			    net->net_value);
+			fileout(line, "a", "/etc/resolv.conf");
+			break;
+		default:
+			break;
+		}
+	}
+
+	return (0);
 }
 
 void
@@ -924,12 +1103,17 @@ main(int argc, char *const *argv)
 	 * XXX Detect cloud with help from hostctl and sysctl
 	 * XXX in addition to the interface name.
 	 */
-	if (strcmp("hvn0", sc->sc_interface) == 0)
+	if (opennebula(sc) == 0)
+		ret = 0;
+	else if (strcmp("hvn0", sc->sc_interface) == 0)
 		ret = azure(sc);
 	else if (strcmp("xnf0", sc->sc_interface) == 0)
 		ret = ec2(sc);
 	else
 		ret = openstack(sc);
+
+	if (sc->sc_stack != NULL)
+		log_debug("%s: %s", __func__, sc->sc_stack);
 
 	if (sc->sc_dryrun) {
 		agent_free(sc);

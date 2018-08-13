@@ -1,5 +1,6 @@
 PROG=		cloud-agent
-SRCS=		azure.c cloudinit.c http.c json.c jsmn.c log.c openstack.c main.c xml.c
+SRCS=		http.c json.c jsmn.c log.c main.c xml.c
+SRCS+=		azure.c cloudinit.c opennebula.c openstack.c
 BINDIR=		/usr/local/libexec
 MANDIR=		/usr/local/man/man
 
@@ -15,7 +16,7 @@ CFLAGS+=	-Wmissing-declarations
 CFLAGS+=	-Wshadow -Wpointer-arith
 CFLAGS+=	-Wsign-compare -Wcast-qual
 
-LDADD+=		-lexpat -ltls -lssl -lcrypto
-DPADD+=		${LIBEXPAT} ${LIBTLS} ${LIBSSL} ${LIBCRYPTO}
+LDADD+=		-lexpat -ltls -lssl -lcrypto -lutil
+DPADD+=		${LIBEXPAT} ${LIBTLS} ${LIBSSL} ${LIBCRYPTO} ${LIBUTIL}
 
 .include <bsd.prog.mk>
