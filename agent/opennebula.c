@@ -37,7 +37,7 @@ opennebula(struct system_config *sc)
 	char		*hname = NULL;
 	size_t		 len, lineno = 0, i;
 	int		 ret = -1;
-	unsigned int	 unit;
+	unsigned short	 unit;
 
 	/* Return silently without error */
 	if ((fp = fopen("/mnt/context.sh", "r")) == NULL)
@@ -99,7 +99,7 @@ opennebula(struct system_config *sc)
 				goto done;
 			}
 			p[strcspn(p, "_")] = '\0';
-			unit = strtonum(p, 0, UINT32_MAX, &errstr);
+			unit = strtonum(p, 0, UINT16_MAX, &errstr);
 			free(p);
 			if (errstr != NULL) {
 				log_debug("%s: %s", __func__, k);
@@ -116,6 +116,14 @@ opennebula(struct system_config *sc)
 					*p++ = '\0';
 					if ((ret = agent_addnetaddr(sc, 0,
 					    v, AF_UNSPEC, NET_DNS)) != 0)
+						break;
+				}
+			} else if (strcasecmp("SEARCH_DOMAIN", k) == 0) {
+				for (p = v; *p != '\0'; v = p) {
+					p = v + strcspn(v, " \t");
+					*p++ = '\0';
+					if ((ret = agent_addnetaddr(sc, 0,
+					    v, AF_UNSPEC, NET_DNS_DOMAIN)) != 0)
 						break;
 				}
 			} else if (strcasecmp("IP", k) == 0) {
@@ -166,9 +174,12 @@ opennebula(struct system_config *sc)
 				    __func__, k);
 				goto done;
 			}
+		} else if (strcasecmp("HOSTNAME", k) == 0) {
+			if ((hname = strdup(v)) == NULL)
+				log_warnx("failed to set hostname");
 		} else if (strcasecmp("SSH_PUBLIC_KEY", k) == 0) {
 			if (agent_addpubkey(sc, v, NULL) != 0)
-				log_warnx("failed to ssh pubkey");
+				log_warnx("failed to set ssh pubkey");
 		}
 
 		free(line);

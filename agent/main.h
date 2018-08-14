@@ -51,12 +51,13 @@ enum net_type {
 	NET_MTU,
 	NET_GATEWAY,
 	NET_DNS,
+	NET_DNS_DOMAIN,
 	NET_MAX
 };
 
 struct net_addr {
 	enum net_type		 net_type;
-	unsigned int		 net_ifunit;
+	unsigned short		 net_ifunit;
 	char			*net_value;
 	struct sockaddr_storage	 net_addr;
 	unsigned int		 net_num;
@@ -67,6 +68,7 @@ TAILQ_HEAD(net_addrs, net_addr);
 
 struct system_config {
 	const char		*sc_stack;
+	char			*sc_args;
 
 	char			*sc_hostname;
 	char			*sc_username;
