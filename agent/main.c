@@ -667,8 +667,6 @@ agent_configure(struct system_config *sc)
 
 	/* password */
 	if (sc->sc_password == NULL) {
-		str1 = "/PasswordAuthentication/"
-		    "s/.*/PasswordAuthentication no/";
 		if (asprintf(&str2, "permit keepenv nopass %s as root\n"
 		    "permit keepenv nopass root\n", sc->sc_username) == -1)
 			str2 = NULL;
@@ -677,15 +675,14 @@ agent_configure(struct system_config *sc)
 		    sc->sc_username, NULL) != 0)
 			log_warnx("password failed");
 
-		str1 = "/PasswordAuthentication/"
-		    "s/.*/PasswordAuthentication yes/";
 		if (asprintf(&str2, "permit keepenv persist %s as root\n"
 		    "permit keepenv nopass root\n", sc->sc_username) == -1)
 			str2 = NULL;
 	}
 
 	/* doas */
-	if (str2 == NULL || fileout(str2, "w", "/etc/doas.conf") != 0)
+	if ((strcmp("root", sc->sc_username) != 0) &&
+	    (str2 == NULL || fileout(str2, "w", "/etc/doas.conf")) != 0)
 		log_warnx("doas failed");
 	free(str2);
 
