@@ -325,11 +325,6 @@ agent_init(const char *ifname, int dryrun, int timeout)
 		free(sc);
 		return (NULL);
 	}
-	if ((sc->sc_username = strdup("puffy")) == NULL) {
-		free(sc);
-		close(sc->sc_nullfd);
-		return (NULL);
-	}
 
 	/* Silently try to mount the cdrom */
 	fd = disable_output(sc, STDERR_FILENO);
@@ -646,6 +641,13 @@ agent_configure(struct system_config *sc)
 	if (fileout(sc->sc_instance, "w", "/var/db/cloud-instance") != 0)
 		log_warnx("instance failed");
 
+	/* Set default username if not set */
+	if ((sc->sc_username == NULL) &&
+	    (sc->sc_username = strdup("puffy")) == NULL) {
+		log_warn("default username");
+		return (-1);
+	}
+
 	/* hostname */
 	log_debug("%s: hostname %s", __func__, sc->sc_hostname);
 	if (fileout(sc->sc_hostname, "w", "/etc/myname") != 0)
@@ -655,11 +657,13 @@ agent_configure(struct system_config *sc)
 
 	/* username */
 	log_debug("%s: username %s", __func__, sc->sc_username);
-	if (shell("useradd", "-L", "staff", "-G", "wheel",
-	    "-m", sc->sc_username, NULL) != 0)
-		log_warnx("username failed");
-	if (fileout(sc->sc_username, "w", "/root/.forward") != 0)
-		log_warnx(".forward failed");
+	if (strcmp("root", sc->sc_username) != 0) {
+		if (shell("useradd", "-L", "staff", "-G", "wheel",
+		    "-m", sc->sc_username, NULL) != 0)
+			log_warnx("username failed");
+		if (fileout(sc->sc_username, "w", "/root/.forward") != 0)
+			log_warnx(".forward failed");
+	}
 
 	/* password */
 	if (sc->sc_password == NULL) {
@@ -703,7 +707,8 @@ agent_configure(struct system_config *sc)
 			continue;
 		log_debug("%s: key %s", __func__, ssh->ssh_keyval);
 		if (fileout(ssh->ssh_keyval, "a",
-		    "/home/%s/.ssh/authorized_keys",
+		    "%s/%s/.ssh/authorized_keys",
+		    strcmp("root", sc->sc_username) == 0 ? "" : "/home",
 		    sc->sc_username) != 0)
 			log_warnx("public key failed");
 	}
@@ -804,7 +809,7 @@ static int
 agent_network(struct system_config *sc)
 {
 	struct net_addr	*net;
-	char		 ift[16], ifname[16], line[1024], path[PATH_MAX];
+	char		 ift[16], ifname[16], line[1024];
 	const char	*family;
 	char		 domain[(NI_MAXHOST + 1) * 6 + 8]; /* up to 6 domains */
 	int		 has_domain = 0;
@@ -832,20 +837,19 @@ agent_network(struct system_config *sc)
 			/* XXX prefix or mask */
 
 			/* hostname.if startup configuration */
-			snprintf(path, sizeof(path),
-			    "/etc/hostname.%s", ifname);
 			if (!ifidx[net->net_ifunit])
-				fileout(comment, "w", path);
+				fileout(comment, "w",
+				    "/etc/hostname.%s", ifname);
 
 			snprintf(line, sizeof(line), "%s alias %s",
 			    family, net->net_value);
-			fileout(line, "a", path);
+			fileout(line, "a", "/etc/hostname.%s", ifname);
 
 			if (!ifidx[net->net_ifunit]++ &&
 			    net->net_ifunit == 0) {
 				snprintf(line, sizeof(line),
 				    "!%s", sc->sc_args);
-				fileout(line, "a", path);
+				fileout(line, "a", "/etc/hostname.%s", ifname);
 			}
 
 			/* runtime configuration */
@@ -1088,7 +1092,7 @@ usage(void)
 {
 	extern char	*__progname;
 
-	fprintf(stderr, "usage: %s [-nuv] [-t 3] interface\n",
+	fprintf(stderr, "usage: %s [-nuv] [-t 3] [-U puffy] interface\n",
 	    __progname);
 	exit(1);
 }
@@ -1130,12 +1134,12 @@ main(int argc, char *const *argv)
 	int			 verbose = 0, dryrun = 0, unconfigure = 0;
 	int			 ch, ret, timeout = CONNECT_TIMEOUT;
 	const char		*error = NULL;
-	char			*args;
+	char			*args, *username = NULL;
 
 	if ((args = get_args(argc, argv)) == NULL)
 		fatalx("failed to save args");
 
-	while ((ch = getopt(argc, argv, "nvt:u")) != -1) {
+	while ((ch = getopt(argc, argv, "nvt:U:u")) != -1) {
 		switch (ch) {
 		case 'n':
 			dryrun = 1;
@@ -1147,6 +1151,10 @@ main(int argc, char *const *argv)
 			timeout = strtonum(optarg, -1, 86400, &error);
 			if (error != NULL)
 				fatalx("invalid timeout: %s", error);
+			break;
+		case 'U':
+			if ((username = strdup(optarg)) == NULL)
+				fatal("username");
 			break;
 		case 'u':
 			unconfigure = 1;
@@ -1177,6 +1185,10 @@ main(int argc, char *const *argv)
 	if ((sc = agent_init(argv[0], dryrun, timeout)) == NULL)
 		fatalx("agent");
 	sc->sc_args = args;
+	if (username != NULL) {
+		free(sc->sc_username);
+		sc->sc_username = username;
+	}
 
 	/*
 	 * XXX Detect cloud with help from hostctl and sysctl
