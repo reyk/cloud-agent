@@ -619,7 +619,7 @@ agent_pf(struct system_config *sc, int open)
 		return (0);
 
 	if (open)
-		ret = shellout("pass out proto tcp from egress to port www\n",
+		ret = shellout("pass out proto tcp from (egress) to port www\n",
 		    NULL, "pfctl", "-f", "-", NULL);
 	else
 		ret = shellout("\n", NULL, "pfctl", "-f", "-", NULL);
