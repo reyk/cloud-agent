@@ -80,7 +80,7 @@ DECLARE_ASN1_FUNCTIONS(CMS_ContentInfo)
 DECLARE_ASN1_FUNCTIONS(CMS_ReceiptRequest)
 DECLARE_ASN1_PRINT_FUNCTION(CMS_ContentInfo)
 
-#if LIBRESSL_VERSION_NUMBER >= 0x20900000L
+#if defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x20900000L
 #define M_ASN1_new_of(type) 				\
 	(type *)ASN1_item_new(ASN1_ITEM_rptr(type))
 #define M_ASN1_free_of(x, type) 			\
