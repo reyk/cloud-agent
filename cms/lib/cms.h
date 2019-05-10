@@ -80,6 +80,13 @@ DECLARE_ASN1_FUNCTIONS(CMS_ContentInfo)
 DECLARE_ASN1_FUNCTIONS(CMS_ReceiptRequest)
 DECLARE_ASN1_PRINT_FUNCTION(CMS_ContentInfo)
 
+#if LIBRESSL_VERSION_NUMBER >= 0x20900000L
+#define M_ASN1_new_of(type) 				\
+	(type *)ASN1_item_new(ASN1_ITEM_rptr(type))
+#define M_ASN1_free_of(x, type) 			\
+	ASN1_item_free(CHECKED_PTR_OF(type, x), ASN1_ITEM_rptr(type))
+#endif
+
 # define CMS_SIGNERINFO_ISSUER_SERIAL    0
 # define CMS_SIGNERINFO_KEYIDENTIFIER    1
 
