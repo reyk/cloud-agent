@@ -82,6 +82,7 @@ struct system_config {
 	const char		*sc_ovfenv;
 	const char		*sc_interface;
 	const char		*sc_cdrom;
+	const char		*sc_rootdisk;
 	int			 sc_mount;
 
 	struct source		 sc_addr;
@@ -128,6 +129,9 @@ int	 opennebula(struct system_config *);
 
 /* openstack.c */
 int	 openstack(struct system_config *);
+
+/* growdisk.c */
+int	 growdisk(struct system_config *);
 
 /* main.c */
 int	 shell(const char *, ...);

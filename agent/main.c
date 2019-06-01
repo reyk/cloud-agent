@@ -42,17 +42,18 @@
 #include "main.h"
 #include "xml.h"
 
-__dead void			 usage(void);
-static struct system_config	*agent_init(const char *, int, int);
-static int			 agent_configure(struct system_config *);
-static int			 agent_network(struct system_config *);
-static void			 agent_free(struct system_config *);
-static int			 agent_pf(struct system_config *, int);
-static int			 agent_userdata(const unsigned char *, size_t);
-static void			 agent_unconfigure(void);
-static char			*metadata_parse(char *, size_t, enum strtype);
+__dead void	 usage(void);
+static struct system_config
+		*agent_init(const char *, const char *, int, int);
+static int	 agent_configure(struct system_config *);
+static int	 agent_network(struct system_config *);
+static void	 agent_free(struct system_config *);
+static int	 agent_pf(struct system_config *, int);
+static int	 agent_userdata(const unsigned char *, size_t);
+static void	 agent_unconfigure(void);
+static char	*metadata_parse(char *, size_t, enum strtype);
 
-static int			 agent_timeout;
+static int	 agent_timeout;
 
 int
 shell(const char *arg, ...)
@@ -306,7 +307,7 @@ get_word(const unsigned char *ptr, size_t len)
 }
 
 static struct system_config *
-agent_init(const char *ifname, int dryrun, int timeout)
+agent_init(const char *ifname, const char *rootdisk, int dryrun, int timeout)
 {
 	struct system_config	*sc;
 	int			 fd, ret;
@@ -318,6 +319,7 @@ agent_init(const char *ifname, int dryrun, int timeout)
 	sc->sc_cdrom = "/dev/cd0c";
 	sc->sc_dryrun = dryrun ? 1 : 0;
 	sc->sc_timeout = agent_timeout = timeout < 1 ? -1 : timeout * 1000;
+	sc->sc_rootdisk = rootdisk;
 	TAILQ_INIT(&sc->sc_pubkeys);
 	TAILQ_INIT(&sc->sc_netaddrs);
 
@@ -1089,8 +1091,8 @@ usage(void)
 {
 	extern char	*__progname;
 
-	fprintf(stderr, "usage: %s [-nuv] [-t 3] [-U puffy] interface\n",
-	    __progname);
+	fprintf(stderr, "usage: %s [-nuv] [-r rootdisk] [-t 3] [-U puffy] "
+	    "interface\n", __progname);
 	exit(1);
 }
 
@@ -1130,19 +1132,19 @@ main(int argc, char *const *argv)
 	struct system_config	*sc;
 	int			 verbose = 0, dryrun = 0, unconfigure = 0;
 	int			 ch, ret, timeout = CONNECT_TIMEOUT;
-	const char		*error = NULL;
+	const char		*error = NULL, *rootdisk = NULL;
 	char			*args, *username = NULL;
 
 	if ((args = get_args(argc, argv)) == NULL)
 		fatalx("failed to save args");
 
-	while ((ch = getopt(argc, argv, "nvt:U:u")) != -1) {
+	while ((ch = getopt(argc, argv, "nr:t:U:uv")) != -1) {
 		switch (ch) {
 		case 'n':
 			dryrun = 1;
 			break;
-		case 'v':
-			verbose += 2;
+		case 'r':
+			rootdisk = optarg;
 			break;
 		case 't':
 			timeout = strtonum(optarg, -1, 86400, &error);
@@ -1155,6 +1157,9 @@ main(int argc, char *const *argv)
 			break;
 		case 'u':
 			unconfigure = 1;
+			break;
+		case 'v':
+			verbose += 2;
 			break;
 		default:
 			usage();
@@ -1176,11 +1181,18 @@ main(int argc, char *const *argv)
 	if (argc != 1)
 		usage();
 
-	if (pledge("stdio cpath rpath wpath exec proc dns inet", NULL) == -1)
+	if (pledge(rootdisk == NULL ?
+	    "stdio cpath rpath wpath exec proc dns inet" :
+	    "stdio cpath rpath wpath exec proc dns inet disklabel",
+	    NULL) == -1)
 		fatal("pledge");
 
-	if ((sc = agent_init(argv[0], dryrun, timeout)) == NULL)
+	if ((sc = agent_init(argv[0], rootdisk, dryrun, timeout)) == NULL)
 		fatalx("agent");
+
+	if (rootdisk != NULL && growdisk(sc) == -1)
+		fatalx("failed to grow %s", rootdisk);
+
 	sc->sc_args = args;
 	if (username != NULL) {
 		free(sc->sc_username);

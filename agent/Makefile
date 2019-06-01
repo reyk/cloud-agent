@@ -1,6 +1,7 @@
 PROG=		cloud-agent
 SRCS=		http.c json.c jsmn.c log.c main.c xml.c
 SRCS+=		azure.c cloudinit.c opennebula.c openstack.c
+SRCS+=		growdisk.c
 BINDIR=		/usr/local/libexec
 MANDIR=		/usr/local/man/man
 

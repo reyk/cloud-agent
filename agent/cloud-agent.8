@@ -23,6 +23,7 @@
 .Sh SYNOPSIS
 .Nm cloud-agent
 .Op Fl nuv
+.Op Fl r Ar rootdisk
 .Op Fl t Ar timeout
 .Op Fl U Ar username
 .Ar interface
@@ -53,6 +54,10 @@ configuration.
 Using
 .Dq root
 is supported, but not recommended.
+.It Fl r Ar rootdisk
+Automatically grow the last
+.Ox
+FFS partition of the root disk to use all the available space.
 .It Fl u
 Deprovision and unconfigure the system.
 This deletes keys, passwords, and logs files without asking for permission.
@@ -64,11 +69,12 @@ Enable
 .Nm
 in the
 .Xr hostname.if 5
-of the VM's primary networking interface:
+of the VM's primary networking interface and automatically the last
+partition of the root disk:
 .Bd -literal -offset indent
 # cat /etc/hostname.hvn0
 dhcp
-!/usr/local/libexec/cloud-agent "\e$if"
+!/usr/local/libexec/cloud-agent -r sd0 "\e$if"
 .Ed
 .Sh FILES
 .Bl -tag -width "/usr/local/libexec/cloud-agentX" -compact
