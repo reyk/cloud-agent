@@ -36,6 +36,8 @@ tryendpoint(struct system_config *sc,
     int (fetch)(struct system_config *),
     int (next)(struct system_config *))
 {
+	int	 errfd = -1, ret;
+
 	free(sc->sc_endpoint);
 	sc->sc_endpoint = NULL;
 
@@ -59,7 +61,10 @@ tryendpoint(struct system_config *sc,
 		return (*next)(sc);
 	}
 
-	if ((*fetch)(sc) != 0)
+	errfd = disable_output(sc, STDERR_FILENO);
+	ret = (*fetch)(sc);
+	enable_output(sc, STDERR_FILENO, errfd);
+	if (ret != 0)
 		return tryendpoint(sc, fetch, next);
 
 	return (0);
