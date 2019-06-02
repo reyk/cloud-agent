@@ -32,6 +32,8 @@
 
 #include "main.h"
 
+#define MEG(_n)	((_n) * DEV_BSIZE / 1024 / 1024)
+
 static uint16_t	 dkcksum(struct disklabel *);
 
 static uint16_t
@@ -115,17 +117,21 @@ growdisk(struct system_config *sc)
 	bend = DL_GETDSIZE(&lp) - DL_GETBSTART(&lp);
 	psize = bend - DL_GETPOFFSET(p);
 
-	if (sc->sc_dryrun ||
-	    (bend == DL_GETBEND(&lp) && psize == DL_GETPSIZE(p))) {
-		log_debug("%s: %s%c uses maximum size %llu",
-		    __func__, sc->sc_rootdisk, last_part, psize);
-
+	/* Only grow, but never shring the disk */
+	if (bend <= DL_GETBEND(&lp) && psize <= DL_GETPSIZE(p)) {
+		log_debug("%s: not growing %s%c, size is %lluMB",
+		    __func__, sc->sc_rootdisk, last_part, MEG(psize));
+		ret = 0;
+	} else {
+		log_info("growing %s%c from %lluMB to %lluMB",
+		    sc->sc_rootdisk, last_part,
+		    MEG(DL_GETPSIZE(p)), MEG(psize));
+		ret = -1;
+	}
+	if (sc->sc_dryrun || ret == 0) {
 		ret = 0;
 		goto done;
 	}
-
-	log_debug("%s: growing %s%c from %llu to %llu",
-	    __func__, sc->sc_rootdisk, last_part, DL_GETPSIZE(p), psize);
 
 	/* Update OpenBSD boundaries */
 	DL_SETBEND(&lp, bend);
