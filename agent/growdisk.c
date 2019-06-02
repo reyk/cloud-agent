@@ -154,6 +154,7 @@ growdisk(struct system_config *sc)
 	(void)shell("growfs", "-yq", path, NULL);
 	if ((ret = shell("fsck", "-y", path, NULL)) != 0)
 		ret = -1;
+	(void)shell("mount", "-a", "-t", "nonfs,vnd", NULL);
 
 	enable_output(sc, STDERR_FILENO, errfd);
 	enable_output(sc, STDOUT_FILENO, outfd);
