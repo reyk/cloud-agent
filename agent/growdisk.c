@@ -48,19 +48,21 @@ dkcksum(struct disklabel *lp)
 int
 growdisk(struct system_config *sc)
 {
-	char			 c, last_part = 0, *out, *path = NULL;
+	char			 c, last_part = 0, *out = NULL, *path = NULL;
 	int			 ret = -1, i, errfd, outfd;
+	uint64_t		 bend, psize;
 	struct partition	*pp, *p = NULL;
 	struct disklabel	 lp;
-	int			 fd;
 	uint16_t		 cksum;
+	int			 fd;
 
 	/*
 	 * Grow the OpenBSD MBR partition
 	 */
 
 	/* XXX this is a bit ugly but easier to do */
-	if (shellout("e 3\n\n\n\n*\nw\nq\n", &out,
+	if (!sc->sc_dryrun &&
+	    shellout("e 3\n\n\n\n*\nw\nq\n", &out,
 	    "fdisk", "-e", sc->sc_rootdisk, NULL) != 0) {
 		log_warnx("failed to grow OpenBSD partition");
 		return (-1);
@@ -110,11 +112,26 @@ growdisk(struct system_config *sc)
 		goto done;
 	}
 
+	bend = DL_GETDSIZE(&lp) - DL_GETBSTART(&lp);
+	psize = DL_GETBEND(&lp) - DL_GETPOFFSET(p);
+
+	if (sc->sc_dryrun ||
+	    (bend == DL_GETBEND(&lp) && psize == DL_GETPSIZE(p))) {
+		log_debug("%s: %s%c uses maximum size %llu",
+		    __func__, sc->sc_rootdisk, last_part, psize);
+
+		ret = 0;
+		goto done;
+	}
+
+	log_debug("%s: growing %s%c from %llu to %llu",
+	    __func__, sc->sc_rootdisk, last_part, DL_GETPSIZE(p), psize);
+
 	/* Update OpenBSD boundaries */
-	DL_SETBEND(&lp, DL_GETDSIZE(&lp) - DL_GETBSTART(&lp));
+	DL_SETBEND(&lp, bend);
 
 	/* Update the size of the last partition */
-	DL_SETPSIZE(p, DL_GETBEND(&lp) - DL_GETPOFFSET(p));
+	DL_SETPSIZE(p, psize);
 
 	lp.d_checksum = dkcksum(&lp);
 
