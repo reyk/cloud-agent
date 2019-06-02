@@ -76,6 +76,7 @@ struct system_config {
 	char			*sc_pubkey;
 	char			*sc_userdata;
 	char			*sc_endpoint;
+	int			 sc_dhcpendpoint;
 	char			*sc_instance;
 	int			 sc_timeout;
 
@@ -123,6 +124,9 @@ int	 azure(struct system_config *);
 /* cloudinit.c */
 int	 ec2(struct system_config *);
 int	 cloudinit(struct system_config *);
+int	 tryendpoint(struct system_config *,
+	    int (fetch)(struct system_config *),
+	    int (next)(struct system_config *));
 
 /* opennebula.c */
 int	 opennebula(struct system_config *);

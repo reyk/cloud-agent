@@ -32,30 +32,59 @@
 static int	 cloudinit_fetch(struct system_config *);
 
 int
+tryendpoint(struct system_config *sc,
+    int (fetch)(struct system_config *),
+    int (next)(struct system_config *))
+{
+	free(sc->sc_endpoint);
+	sc->sc_endpoint = NULL;
+
+	switch (sc->sc_dhcpendpoint) {
+	case 0:
+		sc->sc_dhcpendpoint = 1;
+		if (dhcp_getendpoint(sc) == -1)
+			return tryendpoint(sc, fetch, next);
+		break;
+	case 1:
+		sc->sc_dhcpendpoint = 2;
+		if ((sc->sc_endpoint = strdup(DEFAULT_ENDPOINT)) == NULL) {
+			log_warnx("failed to set defaults");
+			return (-1);
+		}
+		break;
+	default:
+		if (next == NULL)
+			return (-1);
+		sc->sc_dhcpendpoint = 0;
+		return (*next)(sc);
+	}
+
+	if ((*fetch)(sc) != 0)
+		return tryendpoint(sc, fetch, next);
+
+	return (0);
+}
+
+int
 ec2(struct system_config *sc)
 {
 	free(sc->sc_username);
-	if ((sc->sc_username = strdup("ec2-user")) == NULL ||
-	    (sc->sc_endpoint = strdup(DEFAULT_ENDPOINT)) == NULL) {
-		log_warnx("failed to set defaults");
+	if ((sc->sc_username = strdup("ec2-user")) == NULL) {
+		log_warnx("failed to set default user");
 		return (-1);
 	}
 
 	sc->sc_stack = "ec2";
-	return (cloudinit_fetch(sc));
+	sc->sc_dhcpendpoint = 1;
+	return tryendpoint(sc, cloudinit_fetch, NULL);
 }
 
 int
 cloudinit(struct system_config *sc)
 {
-	if ((dhcp_getendpoint(sc) == -1) &&
-	    (sc->sc_endpoint = strdup(DEFAULT_ENDPOINT)) == NULL) {
-		log_warnx("failed to set defaults");
-		return (-1);
-	}
-
 	sc->sc_stack = "cloudinit";
-	return (cloudinit_fetch(sc));
+	sc->sc_dhcpendpoint = 0;
+	return tryendpoint(sc, cloudinit_fetch, NULL);
 }
 
 static int

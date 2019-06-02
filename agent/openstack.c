@@ -31,21 +31,11 @@
 
 static int	 openstack_fetch(struct system_config *);
 
+
 int
 openstack(struct system_config *sc)
 {
-	if ((dhcp_getendpoint(sc) == -1) &&
-	    (sc->sc_endpoint = strdup(DEFAULT_ENDPOINT)) == NULL) {
-		log_warnx("failed to set defaults");
-		return (-1);
-	}
-
-	if (openstack_fetch(sc) != 0) {
-		free(sc->sc_endpoint);
-		return (cloudinit(sc));
-	}
-
-	return (0);
+	return tryendpoint(sc, openstack_fetch, cloudinit);
 }
 
 static int
