@@ -113,7 +113,7 @@ growdisk(struct system_config *sc)
 	}
 
 	bend = DL_GETDSIZE(&lp) - DL_GETBSTART(&lp);
-	psize = DL_GETBEND(&lp) - DL_GETPOFFSET(p);
+	psize = bend - DL_GETPOFFSET(p);
 
 	if (sc->sc_dryrun ||
 	    (bend == DL_GETBEND(&lp) && psize == DL_GETPSIZE(p))) {
