@@ -40,11 +40,14 @@ opennebula(struct system_config *sc)
 	int		 ret = -1;
 	unsigned short	 unit;
 
+	if (sc->sc_state == STATE_INIT) {
+		sc->sc_state = STATE_169;
+		return (-1);
+	}
+
 	/* Return silently without error */
 	if ((fp = fopen("/mnt/context.sh", "r")) == NULL)
 		goto done;
-
-	sc->sc_stack = "opennebula";
 
 	while ((line = fparseln(fp, &len, &lineno,
 	    delim, FPARSELN_UNESCALL)) != NULL) {

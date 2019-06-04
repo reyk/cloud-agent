@@ -63,16 +63,22 @@ azure(struct system_config *sc)
 {
 	int	 ret = -1;
 
-	sc->sc_stack = "azure";
+	if (sc->sc_state == STATE_INIT) {
+		free(sc->sc_username);
+		if ((sc->sc_username = strdup("azure-user")) == NULL) {
+			log_warnx("failed to set default user");
+			return (-1);
+		}
 
-	/* Apply defaults */
-	free(sc->sc_username);
-	if ((sc->sc_username = strdup("azure-user")) == NULL) {
-		log_warnx("failed to set default user");
-		goto fail;
+		/* Apply defaults */
+		sc->sc_ovfenv = "/var/db/azure-ovf-env.xml";
+		sc->sc_priv = &az_config;
+		sc->sc_state = STATE_DHCP;
+		return (-1);
 	}
-	sc->sc_ovfenv = "/var/db/azure-ovf-env.xml";
-	sc->sc_priv = &az_config;
+
+	/* Don't try other endpoints */
+	sc->sc_state = STATE_DONE;
 
 	if (azure_getovfenv(sc) != 0) {
 		log_warnx("failed to get ovf-env.xml");
