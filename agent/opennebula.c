@@ -34,6 +34,7 @@ opennebula(struct system_config *sc)
 	FILE		*fp;
 	const char	*delim = "\\\\\0", *errstr;
 	char		*line = NULL, *k, *v, *p, q;
+	char		*value = NULL, *next = NULL, *last;
 	char		*hname = NULL;
 	size_t		 len, lineno = 0, i;
 	int		 ret = -1;
@@ -72,20 +73,55 @@ opennebula(struct system_config *sc)
 
 		/* value is quoted */
 		q = *v;
-		if (strspn(v, "\"'") == 0 || (p = strrchr(v, q)) == v) {
+		if (strspn(v, "\"'") == 0) {
 			free(line);
 			continue;
 		}
 		*v++ = '\0';
-		*p = '\0';
+
+		/* quoted value can be continued on multiple lines */
+		if ((value = strdup("")) == NULL) {
+			log_debug("%s: strdup", __func__);
+			goto done;
+		}
+		next = v;
+		do {
+			if ((p = strrchr(next, q)) != NULL)
+				*p++ = '\0';
+			if (*next) {
+				last = value;
+				if (asprintf(&value, "%s%s\n",
+				    last, next) == -1) {
+					log_debug("%s: asprintf", __func__);
+					if (next != v)
+						free(next);
+					goto done;
+				}
+				free(last);
+			}
+			if (next != v)
+				free(next);
+		} while (p == NULL &&
+		    (next = fparseln(fp, &len, &lineno,
+		    delim, FPARSELN_UNESCALL)) != NULL);
+		next = NULL;
+		v = value;
+
+		/* strip trailing newline */
+		if ((p = strrchr(v, '\n')) != NULL)
+			*p = '\0';
 
 		/* continue if value is empty */
 		if (*v == '\0') {
 			free(line);
+			free(value);
+			value = NULL;
 			continue;
 		}
 
-		log_debug("%s: %s = %s", __func__, k, v);
+		/* print key/value unless it is a multi-line value */
+		if (strcasecmp("SSH_PUBLIC_KEY", k) != 0)
+			log_debug("%s: %s = %s", __func__, k, v);
 
 		if (strcasecmp("NETWORK", k) == 0) {
 			if (strcasecmp("YES", v) == 0)
@@ -178,11 +214,21 @@ opennebula(struct system_config *sc)
 			if ((hname = strdup(v)) == NULL)
 				log_warnx("failed to set hostname");
 		} else if (strcasecmp("SSH_PUBLIC_KEY", k) == 0) {
-			if (agent_addpubkey(sc, v, NULL) != 0)
-				log_warnx("failed to set ssh pubkey");
+			do {
+				p = v + strcspn(v, "\n");
+				*p++ = '\0';
+				if (*v)
+					log_debug("%s: %s = %s",
+					    __func__, k, v);
+				if (*v && agent_addpubkey(sc, v, NULL) != 0)
+					log_warnx("failed to set ssh pubkey");
+				v = p + strspn(p, "\n");
+			} while (*v != '\0');
 		}
 
 		free(line);
+		free(value);
+		value = NULL;
 	}
 
 	fclose(fp);
@@ -216,5 +262,6 @@ opennebula(struct system_config *sc)
 	if (fp != NULL)
 		fclose(fp);
 	free(line);
+	free(value);
 	return (ret);
 }
