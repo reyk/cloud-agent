@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <pwd.h>
 #include <err.h>
 
 #include "main.h"
@@ -719,7 +720,7 @@ azure_getovfenv(struct system_config *sc)
 	}
 
 	if ((xe = xml_findl(&xp->xe_head, "UserPassword", NULL)) != NULL) {
-		if ((sc->sc_password = calloc(1, 128)) == NULL) {
+		if ((sc->sc_password_hash = calloc(1, _PASSWORD_LEN)) == NULL) {
 			log_debug("%s: password failed", __func__);
 			goto done;
 		}
@@ -727,13 +728,14 @@ azure_getovfenv(struct system_config *sc)
 		str = strndup(xe->xe_data, xe->xe_datalen);
 		if (str == NULL ||
 		    crypt_newhash(str, "bcrypt,a",
-		    sc->sc_password, 128) != 0) {
+		    sc->sc_password_hash, _PASSWORD_LEN) != 0) {
 			log_debug("%s: password hashing failed", __func__);
-			free(sc->sc_password);
-			sc->sc_password = NULL;
+			free(sc->sc_password_hash);
+			sc->sc_password_hash = NULL;
 			free(str);
 			goto done;
 		}
+		explicit_bzero(str, xe->xe_datalen);
 		free(str);
 
 		/* Replace unencrypted password with hash */
@@ -743,11 +745,11 @@ azure_getovfenv(struct system_config *sc)
 		/* Update element for xml_print() below */
 		explicit_bzero(xe->xe_data, xe->xe_datalen);
 		free(xe->xe_data);
-		xe->xe_data = strdup(sc->sc_password);
-		xe->xe_datalen = strlen(sc->sc_password);
+		xe->xe_data = strdup(sc->sc_password_hash);
+		xe->xe_datalen = strlen(sc->sc_password_hash);
 	} else if ((xe = xml_findl(&xp->xe_head,
 	    "UserPasswordHash", NULL)) != NULL) {
-		if ((sc->sc_password =
+		if ((sc->sc_password_hash =
 		    get_word(xe->xe_data, xe->xe_datalen)) != NULL) {
 			log_debug("%s: password hash failed", __func__);
 			goto done;

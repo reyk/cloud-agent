@@ -23,6 +23,7 @@
 .Sh SYNOPSIS
 .Nm cloud-agent
 .Op Fl nuv
+.Op Fl p Ar length
 .Op Fl r Ar rootdisk
 .Op Fl t Ar timeout
 .Op Fl U Ar username
@@ -35,6 +36,17 @@ environments, including Microsoft Azure and Amazon AWS.
 .Pp
 The options are as follows:
 .Bl -tag -width Ds
+.It Fl p Ar length
+Generate and set a random password for the default user.
+The password will be written in its plain form into the
+.Pa ~/.ssh/authorized_keys
+file.
+This allows to use the
+.Xr doas 1
+command to gain root privileges.
+The minimum
+.Ar length
+is 8 characters and the default is an empty password.
 .It Fl n
 Do not configure the system and skip the provisioning step.
 .It Fl t Ar timeout
@@ -78,6 +90,8 @@ dhcp
 .Ed
 .Sh FILES
 .Bl -tag -width "/usr/local/libexec/cloud-agentX" -compact
+.It Pa ~/.ssh/authorized_keys
+The location of the agent-configured SSH public keys and optional password.
 .It Pa /usr/local/libexec/cloud-agent
 The agent itself.
 .It Pa /usr/local/bin/cms

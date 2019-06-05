@@ -37,6 +37,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <poll.h>
+#include <pwd.h>
 #include <err.h>
 
 #include "main.h"
@@ -360,13 +361,19 @@ agent_free(struct system_config *sc)
 		log_debug("%s: unmounted %s", __func__, sc->sc_cdrom);
 	}
 
-	free(sc->sc_args);
+	if (sc->sc_password_plain != NULL) {
+		/* XXX can be removed with calloc_conceal() post-6.6 */
+		explicit_bzero(sc->sc_password_plain,
+		    strlen(sc->sc_password_plain));
+		free(sc->sc_password_plain);
+	}
+	free(sc->sc_password_hash);
 	free(sc->sc_hostname);
 	free(sc->sc_username);
-	free(sc->sc_password);
 	free(sc->sc_userdata);
 	free(sc->sc_endpoint);
 	free(sc->sc_instance);
+	free(sc->sc_args);
 	close(sc->sc_nullfd);
 
 	while ((ssh = TAILQ_FIRST(&sc->sc_pubkeys))) {
@@ -628,6 +635,7 @@ agent_pf(struct system_config *sc, int open)
 static int
 agent_configure(struct system_config *sc)
 {
+	char			 pwbuf[_PASSWORD_LEN + 2];
 	struct ssh_pubkey	*ssh;
 	char			*str1, *str2;
 
@@ -669,18 +677,30 @@ agent_configure(struct system_config *sc)
 	}
 
 	/* password */
-	if (sc->sc_password == NULL) {
+	if (sc->sc_password_hash == NULL) {
 		if (asprintf(&str2, "permit keepenv nopass %s as root\n"
 		    "permit keepenv nopass root\n", sc->sc_username) == -1)
 			str2 = NULL;
 	} else {
-		if (shell("usermod", "-p", sc->sc_password,
+		if (shell("usermod", "-p", sc->sc_password_hash,
 		    sc->sc_username, NULL) != 0)
 			log_warnx("password failed");
 
 		if (asprintf(&str2, "permit keepenv persist %s as root\n"
 		    "permit keepenv nopass root\n", sc->sc_username) == -1)
 			str2 = NULL;
+
+		/* write generated password as comment to authorized_keys */
+		if (sc->sc_password_plain != NULL) {
+			snprintf(pwbuf, sizeof(pwbuf), "# %s",
+			    sc->sc_password_plain);
+			if (fileout(pwbuf, "w",
+			    "%s/%s/.ssh/authorized_keys",
+			    strcmp("root", sc->sc_username) == 0 ? "" : "/home",
+			    sc->sc_username) != 0)
+				log_warnx("password comment failed");
+			explicit_bzero(pwbuf, sizeof(pwbuf));
+		}
 	}
 
 	/* doas */
@@ -690,7 +710,7 @@ agent_configure(struct system_config *sc)
 	free(str2);
 
 	/* ssh configuration */
-	if (sc->sc_password == NULL && !TAILQ_EMPTY(&sc->sc_pubkeys))
+	if (sc->sc_password_hash == NULL && !TAILQ_EMPTY(&sc->sc_pubkeys))
 		str1 = "/PasswordAuthentication/"
 		    "s/.*/PasswordAuthentication no/";
 	else
@@ -1096,8 +1116,8 @@ usage(void)
 {
 	extern char	*__progname;
 
-	fprintf(stderr, "usage: %s [-nuv] [-r rootdisk] [-t 3] [-U puffy] "
-	    "interface\n", __progname);
+	fprintf(stderr, "usage: %s [-nuv] [-p length] [-r rootdisk] "
+	    "[-t 3] [-U puffy] interface\n", __progname);
 	exit(1);
 }
 
@@ -1131,22 +1151,64 @@ get_args(int argc, char *const *argv)
 	return (args);
 }
 
+static char *
+pwgen(size_t len, char **hash)
+{
+	char		*password;
+	size_t		 i, alphabet_len;
+	const char	*alphabet =
+	    "0123456789_"
+	    "abcdefghijklmnopqrstuvwxyz"
+	    "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+	alphabet_len = strlen(alphabet);
+	*hash = NULL;
+
+	/* XXX use calloc_conceal() post-6.6 */
+	if ((password = calloc(1, len + 1)) == NULL)
+		return (NULL);
+
+	/* Simple password generator */
+	for (i = 0; i < len; i++)
+		password[i] = alphabet[arc4random_uniform(alphabet_len)];
+
+	if ((*hash = calloc(1, _PASSWORD_LEN)) == NULL) {
+		freezero(password, len + 1);
+		return (NULL);
+	}
+
+	if (crypt_newhash(password, "bcrypt,a",
+	    *hash, _PASSWORD_LEN) != 0) {
+		freezero(password, len + 1);
+		freezero(*hash, _PASSWORD_LEN);
+		password = NULL;
+		*hash = NULL;
+	}
+
+	return (password);
+}
+
 int
 main(int argc, char *const *argv)
 {
 	struct system_config	*sc;
 	int			 verbose = 0, dryrun = 0, unconfigure = 0;
-	int			 ch, ret, timeout = CONNECT_TIMEOUT;
+	int			 genpw = 0, ch, ret, timeout = CONNECT_TIMEOUT;
 	const char		*error = NULL, *rootdisk = NULL;
 	char			*args, *username = NULL;
 
 	if ((args = get_args(argc, argv)) == NULL)
 		fatalx("failed to save args");
 
-	while ((ch = getopt(argc, argv, "nr:t:U:uv")) != -1) {
+	while ((ch = getopt(argc, argv, "np:r:t:U:uv")) != -1) {
 		switch (ch) {
 		case 'n':
 			dryrun = 1;
+			break;
+		case 'p':
+			genpw = strtonum(optarg, 8, 8192, &error);
+			if (error != NULL)
+				fatalx("invalid password length: %s", error);
 			break;
 		case 'r':
 			rootdisk = optarg;
@@ -1216,6 +1278,19 @@ main(int argc, char *const *argv)
 		ret = ec2(sc);
 	else
 		ret = openstack(sc);
+
+	if (genpw) {
+		if (sc->sc_password_hash != NULL)
+			log_debug("%s: user password hash: %s", __func__,
+			    sc->sc_password_hash);
+		else if ((sc->sc_password_plain = pwgen(genpw,
+		    &sc->sc_password_hash)) != NULL) {
+			if (log_getverbose() > 2)
+				log_debug("%s: generated password: %s",
+				    __func__, sc->sc_password_plain);
+		} else
+			log_warnx("failed to generate password");
+	}
 
 	/* Debug userdata */
 	if (sc->sc_dryrun && sc->sc_userdata) {

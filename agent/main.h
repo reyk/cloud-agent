@@ -72,7 +72,8 @@ struct system_config {
 
 	char			*sc_hostname;
 	char			*sc_username;
-	char			*sc_password;
+	char			*sc_password_plain;
+	char			*sc_password_hash;
 	char			*sc_pubkey;
 	char			*sc_userdata;
 	char			*sc_endpoint;
