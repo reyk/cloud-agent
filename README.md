@@ -23,7 +23,11 @@ has removed CMS which is required by Azure.
 Usage
 -----
 
-Installation is easy, `cloud-agent` detects the cloud type automatically.
+See the [cloud-agent(8)](cloud-agent.md) documentation for more
+information about the usage.
+
+Basic installation is easy, `cloud-agent` detects the cloud type
+automatically.
 
 * On Microsoft Azure, create a file `/etc/hostname.hvn0`
 
