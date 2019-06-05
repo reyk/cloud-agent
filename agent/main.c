@@ -49,7 +49,8 @@ static int	 agent_configure(struct system_config *);
 static int	 agent_network(struct system_config *);
 static void	 agent_free(struct system_config *);
 static int	 agent_pf(struct system_config *, int);
-static int	 agent_userdata(const unsigned char *, size_t);
+static int	 agent_userdata(struct system_config *,
+		    const unsigned char *, size_t);
 static void	 agent_unconfigure(void);
 static char	*metadata_parse(char *, size_t, enum strtype);
 
@@ -713,7 +714,7 @@ agent_configure(struct system_config *sc)
 	}
 
 	if (sc->sc_userdata) {
-		if (agent_userdata(sc->sc_userdata,
+		if (agent_userdata(sc, sc->sc_userdata,
 		    strlen(sc->sc_userdata)) != 0)
 			log_warnx("user-data failed");
 	}
@@ -737,7 +738,8 @@ agent_configure(struct system_config *sc)
 }
 
 static int
-agent_userdata(const unsigned char *userdata, size_t len)
+agent_userdata(struct system_config *sc,
+    const unsigned char *userdata, size_t len)
 {
 	char		*shebang = NULL, *str = NULL, *line = NULL;
 	const char	*file;
@@ -760,7 +762,7 @@ agent_userdata(const unsigned char *userdata, size_t len)
 		/* Decode user-data and call the function again */
 		if ((str = calloc(1, len + 1)) == NULL ||
 		    (len = b64_pton(userdata, str, len)) < 1 ||
-		    agent_userdata(str, len) != 0) {
+		    agent_userdata(sc, str, len) != 0) {
 			log_warnx("failed to decode user-data");
 			goto fail;
 		}
@@ -779,6 +781,9 @@ agent_userdata(const unsigned char *userdata, size_t len)
 		log_warnx("invalid user-data script");
 		goto fail;
 	}
+
+	if (sc->sc_dryrun)
+		goto done;
 
 	/* write user-data script into file */
 	file = "/etc/rc.user-data";
@@ -1211,6 +1216,13 @@ main(int argc, char *const *argv)
 		ret = ec2(sc);
 	else
 		ret = openstack(sc);
+
+	/* Debug userdata */
+	if (sc->sc_dryrun && sc->sc_userdata) {
+		if (agent_userdata(sc, sc->sc_userdata,
+		    strlen(sc->sc_userdata)) != 0)
+			log_warnx("user-data failed");
+	}
 
 	if (sc->sc_stack != NULL)
 		log_debug("%s: %s", __func__, sc->sc_stack);
