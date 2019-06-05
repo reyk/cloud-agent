@@ -935,8 +935,10 @@ agent_unconfigure(void)
 
 	(void)fileout("permit keepenv persist :wheel as root\n"
 	    "permit keepenv nopass root\n", "w", "/etc/doas.conf");
-}
 
+	/* Remove cloud-instance file */
+	(void)unlink("/var/db/cloud-instance");
+}
 
 static char *
 metadata_parse(char *s, size_t sz, enum strtype type)
