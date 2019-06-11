@@ -1110,7 +1110,8 @@ dhcp_getendpoint(struct system_config *sc)
 	sc->sc_addr.ip = sc->sc_endpoint;
 	sc->sc_addr.family = 4;
 
-	log_debug("%s: %s", __func__, ep);
+	if (log_getverbose() > 2)
+		log_debug("%s: %s", __func__, ep);
 
 	return (0);
 }

@@ -8,6 +8,7 @@ CLOUD-AGENT(8) - System Manager's Manual
 
 **cloud-agent**
 \[**-nuv**]
+\[**-c**&nbsp;*cloud*\[,*cloud*...]]
 \[**-p**&nbsp;*length*]
 \[**-r**&nbsp;*rootdisk*]
 \[**-t**&nbsp;*timeout*]
@@ -19,9 +20,39 @@ CLOUD-AGENT(8) - System Manager's Manual
 The
 **cloud-agent**
 program manages the OpenBSD provisioning and VM interaction in cloud
-environments, including Microsoft Azure and Amazon AWS.
+environments.
 
 The options are as follows:
+
+**-c** *cloud*\[,*cloud*...]
+
+> Probe a list of cloud stacks for provisioning in the specified order.
+> If this option is not specified,
+> **cloud-agent**
+> tries to detect the environment and possible cloud stacks automatically.
+> Supported
+> *cloud*
+> stacks are:
+
+> **azure**
+
+> > Microsoft Azure
+
+> **cloudinit**
+
+> > Generic cloud-init
+
+> **ec2**
+
+> > Amazon AWS EC2
+
+> **opennebula**
+
+> > OpenNebula
+
+> **openstack**
+
+> > OpenStack
 
 **-p** *length*
 
@@ -116,4 +147,4 @@ vmd(8)
 
 Reyk Floeter &lt;[reyk@openbsd.org](mailto:reyk@openbsd.org)&gt;
 
-OpenBSD 6.5 - June 5, 2019
+OpenBSD 6.5 - June 11, 2019
