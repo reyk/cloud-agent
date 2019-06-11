@@ -33,19 +33,29 @@ automatically.
 
 * On Amazon AWS, create a file `/etc/hostname.xnf0`
 
-* On Exoscale, create a file `/etc/hostname.vio0`
+* On CloudStack, such as Exoscale, create a file `/etc/hostname.vio0`
 
 * On OpenBSD VMM (with meta-data), create a file `/etc/hostname.vio0`
 
 * On OpenStack/VMware, create a file `/etc/hostname.vmx0`
 
-* On OpenNebula, create a file `/etc/hostname.if`
-  where _if_ is the name of your primary interface.
-
-* The content of the file is identical for all of them:
+* The content of the file is identical for all of the above:
 
 		dhcp
 		!/usr/local/libexec/cloud-agent "\$if"
+
+* On OpenNebula, such as Data Center Light, create a file `/etc/hostname.if`
+  where _if_ is the name of your primary interface.
+  The `dhcp` line should be ommitted in the file:
+
+		!/usr/local/libexec/cloud-agent "\$if"
+
+Releases
+--------
+
+See the [Changelog](CHANGELOG.md) for a summary of changes and
+download the releases from the
+[release page](https://github.com/reyk/cloud-agent/releases).
 
 Author
 ------
