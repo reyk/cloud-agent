@@ -31,11 +31,14 @@
 
 static int	 openstack_fetch(struct system_config *);
 
-
 int
 openstack(struct system_config *sc)
 {
-	return tryendpoint(sc, openstack_fetch, cloudinit);
+	if (sc->sc_state == STATE_INIT) {
+		sc->sc_state = STATE_DHCP;
+		return (-1);
+	}
+	return openstack_fetch(sc);
 }
 
 static int
@@ -53,7 +56,6 @@ openstack_fetch(struct system_config *sc)
 	if ((json = metadata(sc,
 	    "/openstack/latest/meta_data.json", TEXT)) == NULL)
 		goto fail;
-	sc->sc_stack = "openstack";
 
 	if ((j = json_parse(json, strlen(json))) == NULL)
 		goto fail;

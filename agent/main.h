@@ -29,10 +29,28 @@
 #define DEFAULT_ENDPOINT	"169.254.169.254"
 #define CONNECT_TIMEOUT		10 /* in seconds */
 
+enum cloudname {
+	AZURE,
+	CLOUDINIT,
+	EC2,
+	OPENNEBULA,
+	OPENSTACK
+};
+#define CLOUDNAMES	{						\
+	"azure", "cloudinit", "ec2", "opennebula", "openstack", NULL	\
+}
+
 enum strtype {
 	WORD,
 	LINE,
 	TEXT
+};
+
+enum state {
+	STATE_INIT,
+	STATE_DHCP,
+	STATE_169,
+	STATE_DONE
 };
 
 struct ssh_pubkey {
@@ -66,6 +84,14 @@ struct net_addr {
 };
 TAILQ_HEAD(net_addrs, net_addr);
 
+struct system_config;
+struct cloud {
+	enum cloudname		 cloud_name;
+	int			(*fetch)(struct system_config *);
+	TAILQ_ENTRY(cloud)	 cloud_entry;
+};
+TAILQ_HEAD(clouds, cloud);
+
 struct system_config {
 	const char		*sc_stack;
 	char			*sc_args;
@@ -77,7 +103,8 @@ struct system_config {
 	char			*sc_pubkey;
 	char			*sc_userdata;
 	char			*sc_endpoint;
-	int			 sc_dhcpendpoint;
+	enum state		 sc_state;
+	struct clouds		*sc_clouds;
 	char			*sc_instance;
 	int			 sc_timeout;
 
@@ -125,9 +152,6 @@ int	 azure(struct system_config *);
 /* cloudinit.c */
 int	 ec2(struct system_config *);
 int	 cloudinit(struct system_config *);
-int	 tryendpoint(struct system_config *,
-	    int (fetch)(struct system_config *),
-	    int (next)(struct system_config *));
 
 /* opennebula.c */
 int	 opennebula(struct system_config *);

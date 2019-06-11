@@ -56,6 +56,7 @@ static void	 agent_unconfigure(void);
 static char	*metadata_parse(char *, size_t, enum strtype);
 
 static int	 agent_timeout;
+static char	*cloudnames[] = CLOUDNAMES;
 
 int
 shell(const char *arg, ...)
@@ -970,7 +971,8 @@ metadata(struct system_config *sc, const char *path, enum strtype type)
 	g = http_get(&sc->sc_addr, 1,
 	    sc->sc_endpoint, 80, path, NULL, 0, NULL);
 	if (g != NULL)
-		log_debug("%s: HTTP %d %s", __func__, g->code, path);
+		log_debug("%s: HTTP %d http://%s%s", __func__, g->code,
+		    sc->sc_endpoint, path);
 
 	if (g != NULL && g->code == 200 && g->bodypartsz > 0)
 		str = metadata_parse(g->bodypart, g->bodypartsz, type);
@@ -1190,20 +1192,118 @@ pwgen(size_t len, char **hash)
 	return (password);
 }
 
+static void
+cloud_add(enum cloudname name, struct clouds *clouds)
+{
+	struct cloud	*cloud;
+
+	TAILQ_FOREACH(cloud, clouds, cloud_entry) {
+		if (cloud->cloud_name == name)
+			fatalx("cloud %s defined twice",
+			    cloudnames[name]);
+	}
+
+	if ((cloud = calloc(1, sizeof(*cloud))) == NULL)
+		fatal("%s: calloc", __func__);
+
+	cloud->cloud_name = name;
+	switch (name) {
+	case AZURE:
+		cloud->fetch = azure;
+		break;
+	case CLOUDINIT:
+		cloud->fetch = cloudinit;
+		break;
+	case EC2:
+		cloud->fetch = ec2;
+		break;
+	case OPENNEBULA:
+		cloud->fetch = opennebula;
+		break;
+	case OPENSTACK:
+		cloud->fetch = openstack;
+		break;
+	}
+
+	TAILQ_INSERT_TAIL(clouds, cloud, cloud_entry);
+}
+
+static int
+trycloud(struct system_config *sc, struct cloud *cloud)
+{
+	int		 errfd = -1, ret = -1;
+
+	free(sc->sc_endpoint);
+	sc->sc_endpoint = NULL;
+
+	switch (sc->sc_state) {
+	case STATE_INIT:
+		if ((cloud = TAILQ_FIRST(sc->sc_clouds)) == NULL)
+			return (0);
+		sc->sc_stack = cloudnames[cloud->cloud_name];
+		log_debug("%s: %s", __func__, sc->sc_stack);
+		TAILQ_REMOVE(sc->sc_clouds, cloud, cloud_entry);
+		break;
+	case STATE_DHCP:
+		sc->sc_state = STATE_169;
+		if (dhcp_getendpoint(sc) == -1)
+			return trycloud(sc, cloud);
+		break;
+	case STATE_169:
+		sc->sc_state = STATE_DONE;
+		if ((sc->sc_endpoint = strdup(DEFAULT_ENDPOINT)) == NULL) {
+			log_warnx("failed to set defaults");
+			goto done;
+		}
+		break;
+	case STATE_DONE:
+		sc->sc_state = STATE_INIT;
+		ret = trycloud(sc, NULL);
+		goto done;
+	}
+
+	errfd = disable_output(sc, STDERR_FILENO);
+	ret = (*cloud->fetch)(sc);
+	enable_output(sc, STDERR_FILENO, errfd);
+	if (ret != 0)
+		return trycloud(sc, cloud);
+
+ done:
+	free(cloud);
+	return (0);
+}
+
 int
 main(int argc, char *const *argv)
 {
 	struct system_config	*sc;
-	int			 verbose = 0, dryrun = 0, unconfigure = 0;
+	int			 verbose = 0, dryrun = 0, unconfigure = 0, sub;
 	int			 genpw = 0, ch, ret, timeout = CONNECT_TIMEOUT;
 	const char		*error = NULL, *rootdisk = NULL;
-	char			*args, *username = NULL;
+	char			*args, *username = NULL, *options, *value;
+	struct clouds		 clouds;
+
+	/* log to stderr */
+	log_init(1, LOG_DAEMON);
 
 	if ((args = get_args(argc, argv)) == NULL)
 		fatalx("failed to save args");
 
-	while ((ch = getopt(argc, argv, "np:r:t:U:uv")) != -1) {
+	TAILQ_INIT(&clouds);
+
+	while ((ch = getopt(argc, argv, "c:np:r:t:U:uv")) != -1) {
 		switch (ch) {
+		case 'c':
+			options = optarg;
+			while (*options) {
+				if ((sub = getsubopt(&options,
+				    cloudnames, &value)) == -1)
+					fatalx("invalid cloud stack");
+				else if (value != NULL)
+					fatalx("unexpected value");
+				cloud_add(sub, &clouds);
+			}
+			break;
 		case 'n':
 			dryrun = 1;
 			break;
@@ -1238,8 +1338,6 @@ main(int argc, char *const *argv)
 	argv += optind;
 	argc -= optind;
 
-	/* log to stderr */
-	log_init(1, LOG_DAEMON);
 	log_setverbose(verbose);
 
 	if (unconfigure) {
@@ -1262,24 +1360,30 @@ main(int argc, char *const *argv)
 	if (rootdisk != NULL && growdisk(sc) == -1)
 		fatalx("failed to grow %s", rootdisk);
 
+	sc->sc_clouds = &clouds;
 	sc->sc_args = args;
 	if (username != NULL) {
 		free(sc->sc_username);
 		sc->sc_username = username;
 	}
 
-	/*
-	 * XXX Detect cloud with help from hostctl and sysctl
-	 * XXX in addition to the interface name.
-	 */
-	if (opennebula(sc) == 0)
-		ret = 0;
-	else if (strcmp("hvn0", sc->sc_interface) == 0)
-		ret = azure(sc);
-	else if (strcmp("xnf0", sc->sc_interface) == 0)
-		ret = ec2(sc);
-	else
-		ret = openstack(sc);
+	if (TAILQ_EMPTY(&clouds)) {
+		/*
+		 * XXX Auto-detect cloud with help from hostctl and
+		 * XXX sysctl in addition to the interface name.
+		 */
+		if (strcmp("hvn0", sc->sc_interface) == 0) {
+			cloud_add(AZURE, &clouds);
+		} else if (strcmp("xnf0", sc->sc_interface) == 0) {
+			cloud_add(OPENNEBULA, &clouds);
+			cloud_add(EC2, &clouds);
+		} else {
+			cloud_add(OPENNEBULA, &clouds);
+			cloud_add(OPENSTACK, &clouds);
+			cloud_add(CLOUDINIT, &clouds);
+		}
+	}
+	ret = trycloud(sc, NULL);
 
 	if (genpw) {
 		if (sc->sc_password_hash != NULL)

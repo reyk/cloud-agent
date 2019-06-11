@@ -23,6 +23,7 @@
 .Sh SYNOPSIS
 .Nm cloud-agent
 .Op Fl nuv
+.Op Fl c Ar cloud Ns Op , Ns Ar cloud Ns ...
 .Op Fl p Ar length
 .Op Fl r Ar rootdisk
 .Op Fl t Ar timeout
@@ -32,10 +33,31 @@
 The
 .Nm
 program manages the OpenBSD provisioning and VM interaction in cloud
-environments, including Microsoft Azure and Amazon AWS.
+environments.
 .Pp
 The options are as follows:
 .Bl -tag -width Ds
+.It Fl c Ar cloud Ns Op , Ns Ar cloud Ns ...
+Probe a list of cloud stacks for provisioning in the specified order.
+If this option is not specified,
+.Nm
+tries to detect the environment and possible cloud stacks automatically.
+Supported
+.Ar cloud
+stacks are:
+.Pp
+.Bl -tag -width opennebula -offset indent -compact
+.It Ic azure
+Microsoft Azure
+.It Ic cloudinit
+Generic cloud-init
+.It Ic ec2
+Amazon AWS EC2
+.It Ic opennebula
+OpenNebula
+.It Ic openstack
+OpenStack
+.El
 .It Fl p Ar length
 Generate and set a random password for the default user.
 The password will be written in its plain form into the
