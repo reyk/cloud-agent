@@ -6,10 +6,10 @@ License
 
 * `cloud-agent` is free software under OpenBSD's ISC-style license.
 * Most of the code has been written by Reyk Floeter <reyk@openbsd.org>
-* The http.[ch] files have been written by Kristaps Dzonsons <kristaps@bsd.lv>
+* The {http,json}.[ch] files were written by Kristaps Dzonsons <kristaps@bsd.lv>
 * Please refer to the individual source files for other copyright holders!
 
-> Copyright (c) 2017 Reyk Floeter <reyk@openbsd.org>
+> Copyright (c) 2017, 2018, 2019 Reyk Floeter <reyk@openbsd.org>
 > 
 > Permission to use, copy, modify, and distribute this software for any
 > purpose with or without fee is hereby granted, provided that the above
@@ -26,5 +26,5 @@ License
 `cms/`
 ------
 
-* The CMS code is from the OpenSSL and/or LibreSSL.
+* The CMS code is from OpenSSL and/or LibreSSL.
 * Please refer to the individual source files for other copyright holders!
