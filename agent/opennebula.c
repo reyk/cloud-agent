@@ -35,7 +35,7 @@ opennebula(struct system_config *sc)
 	const char	*delim = "\\\\\0", *errstr;
 	char		*line = NULL, *k, *v, *p, q;
 	char		*value = NULL, *next = NULL, *last;
-	char		*hname = NULL;
+	char		*hname = NULL, *uname = NULL;
 	size_t		 len, lineno = 0, i;
 	int		 ret = -1;
 	unsigned short	 unit;
@@ -241,6 +241,13 @@ opennebula(struct system_config *sc)
 			/* We will detect and decode base64 later */
 			if ((sc->sc_userdata = strdup(v)) == NULL)
 				log_warnx("failed to set userdata");
+		} else if (strcasecmp("USERNAME", k) == 0) {
+			if ((uname = strdup(v)) == NULL)
+				log_warnx("failed to set username");
+			else {
+				free(sc->sc_username);
+				sc->sc_username = uname;
+			}
 		}
 
 		free(line);
