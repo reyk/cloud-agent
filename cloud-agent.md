@@ -147,4 +147,4 @@ vmd(8)
 
 Reyk Floeter &lt;[reyk@openbsd.org](mailto:reyk@openbsd.org)&gt;
 
-OpenBSD 6.5 - June 11, 2019
+OpenBSD 6.5 - June 26, 2019

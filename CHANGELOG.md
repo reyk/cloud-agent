@@ -1,9 +1,10 @@
 # Changelog
 
-## v0.9 (unreleased)
+## v0.9 (2019-06-26)
 
 * Added support for `-c` to specify the probing order of different cloud stacks.
 * Added support for OpenNebula's START_SCRIPT methods (user-data alike).
+* Added support for OpenNebula's USERNAME method.
 * Added support for generating a default user password and writing it into
   `~/.ssh/authorized_keys`.
 * Fixed handling of OpenNebula SSH_PUBLIC_KEY entries with multiple keys.
