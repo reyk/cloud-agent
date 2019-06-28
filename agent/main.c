@@ -1121,7 +1121,8 @@ usage(void)
 {
 	extern char	*__progname;
 
-	fprintf(stderr, "usage: %s [-nuv] [-p length] [-r rootdisk] "
+	fprintf(stderr, "usage: %s [-nuv] "
+	    "[-c cloud[,...]] [-p length] [-r rootdisk]\n\t"
 	    "[-t 3] [-U puffy] interface\n", __progname);
 	exit(1);
 }
