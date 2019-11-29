@@ -9,6 +9,8 @@ MAN=		cloud-agent.8
 
 .ifdef USE_OPENSSL
 CFLAGS+=	-DUSE_OPENSSL=1
+.elifdef USE_LIBRESSL_CMS
+CFLAGS+=	-DUSE_LIBRESSL_CMS=1
 .endif
 
 CFLAGS+=	-Wall

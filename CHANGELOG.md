@@ -1,8 +1,12 @@
 # Changelog
 
-## v1.0 (2019-11-29)
+## v1.1 (2019-11-29)
 
 * Append `/etc/resolv.conf.tail` to `/etc/resolv.conf` if it exists.
+* Use `openssl cms` in LibreSSL >3.0.2 (starting with OpenBSD 6.6-current).
+
+## v1.0 (2019-11-29)
+
 * Fixed usage.
 
 ## v0.9 (2019-06-26)
