@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0 (2019-11-29)
+
+* Append `/etc/resolv.conf.tail` to `/etc/resolv.conf` if it exists.
+* Fixed usage.
+
 ## v0.9 (2019-06-26)
 
 * Added support for `-c` to specify the probing order of different cloud stacks.
