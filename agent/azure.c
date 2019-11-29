@@ -26,6 +26,8 @@
 #include <pwd.h>
 #include <err.h>
 
+#include <openssl/opensslv.h>
+
 #include "main.h"
 #include "http.h"
 #include "xml.h"
@@ -441,13 +443,16 @@ azure_certificates(struct system_config *sc)
 
 	fd = disable_output(sc, STDERR_FILENO);
 
-#ifdef USE_OPENSSL
+#if defined(USE_OPENSSL)
 	/*
 	 * XXX Now comes the part that needs CMS which is only
 	 * XXX present in OpenSSL but got removed from LibreSSL.
 	 */
 	log_debug("%s: running openssl cms", __func__);
 	if (shell("/usr/local/bin/eopenssl", "cms", /* )) */
+#elif defined(USE_LIBRESSL_CMS) || LIBRESSL_VERSION_NUMBER > 0x3000200fL
+	/* And CMS returned to LibreSSL! */
+	if (shell("/usr/bin/openssl", "cms", /* )) */
 #else
 	if (shell("/usr/local/bin/cms",
 #endif
