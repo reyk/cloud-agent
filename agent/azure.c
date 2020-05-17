@@ -528,7 +528,7 @@ azure_getpubkeys(struct system_config *sc)
 
 			/* Convert certificate into public key */
 			if (shellout(inbuf, &in,
-			    "openssl", "x509", "-fingerprint", "-pubkey",
+			    "openssl", "x509", "-fingerprint", "-sha1", "-pubkey",
 			    "-noout", NULL) != 0) {
 				log_debug("%s: could not get public key",
 				    __func__);
