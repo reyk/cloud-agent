@@ -111,7 +111,7 @@ Enable
 **cloud-agent**
 in the
 hostname.if(5)
-of the VM's primary networking interface and automatically the last
+of the VM's primary networking interface and automatically grow the last
 partition of the root disk:
 
 	# cat /etc/hostname.hvn0
